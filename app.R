@@ -15,7 +15,7 @@ library(shiny)
 library(lubridate)
 library(maps)
 library(mapproj)
-source("helpers.R")
+# source("helpers.R")
 # Load data frame
 electric_data <- read_csv("data/Electric_Vehicle_Population_Size_History_By_County.csv", 
                           col_names = c("Date", "County", "State", "Vehicle_Primary_Use", "BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles", "Percent_EV"))
