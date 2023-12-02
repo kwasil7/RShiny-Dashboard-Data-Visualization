@@ -8,7 +8,8 @@
 #
 
 # Load packages
-
+## ui.R ##
+library(shinythemes)
 library(ggplot2)
 library(readr)
 library(shiny)
@@ -17,6 +18,7 @@ library(lubridate)
 library(maps)
 library(mapproj)
 # source("helpers.R")
+
 # Load data frame
 electric_data <- read_csv("data/Electric_Vehicle_Population_Size_History_By_County.csv", 
                           col_names = c("Date", "County", "State", "Vehicle_Primary_Use", "BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles", "Percent_EV"))
@@ -35,8 +37,6 @@ electric_data$Percent_EV <- as.numeric(electric_data$Percent_EV)
 
 electric_data$NonEV_Total <- as.numeric(electric_data$NonEV_Total)
 
-electric_data$EV_Total <- as.numeric(electric_data$EV_Total)
-
 # Conversion to a factor
 electric_data$Vehicle_Primary_Use <- as.factor(electric_data$Vehicle_Primary_Use)
 
@@ -48,6 +48,8 @@ king_county_data <- subset(electric_data[-1, ], County == "King")
 # Define UI 
 
 ui <- fluidPage(
+  
+  theme = shinytheme("superhero"),
   
   sidebarLayout(
     
