@@ -12,6 +12,7 @@
 library(ggplot2)
 library(readr)
 library(shiny)
+library(dplyr)
 library(lubridate)
 library(maps)
 library(mapproj)
@@ -36,6 +37,9 @@ electric_data$NonEV_Total <- as.numeric(electric_data$NonEV_Total)
 
 electric_data$EV_Total <- as.numeric(electric_data$EV_Total)
 
+# Conversion to a factor
+electric_data$Vehicle_Primary_Use <- as.factor(electric_data$Vehicle_Primary_Use)
+
 # Filter for King County data, excluding the first row
 king_county_data <- subset(electric_data[-1, ], County == "King")
 
@@ -57,28 +61,43 @@ ui <- fluidPage(
         inputId = "y",
         label = "Y-axis:",
         choices = c("BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles"),
-        selected = "Total_Vehicles"
+        selected = "EV_Total"
       ),
       # Select variable for x-axis
       selectInput(
         inputId = "x",
         label = "X-axis:",
         choices = c("BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles", "Date"),
-        selected = "EV_Total"
+        selected = "BEVs"
       ),
       # Select variables for colors
       selectInput(
-        inputId = "x",
+        inputId = "z",
         label = "Color by:",
-        choices = c("Vehicle_Primary_Use", "BEVs"),
+        choices = c("Vehicle_Primary_Use", "BEVs", "PHEVs"),
         selected = "Vehicle_Primary_Use"
+      ),
+      # Alpha for the points
+      sliderInput(
+        inputId = "alpha",
+        label = "Alpha:",
+        min = 0, max = 1,
+        value = 0.5
+      ),
+      # Select which types of vehicle use to plot
+      selectInput(
+        inputId = "selected_type",
+        label = "Select vehicle type:",
+        choices = c("Passenger", "Truck"),
+        selected = "Passenger"
       )
     ),
     
     # Output: Show scatterplot
     mainPanel(
       plotOutput(outputId = "scatterplot"),
-      plotOutput(outputId = "densityplot", height = 200)
+      plotOutput(outputId = "densityplot", height = 200),
+      plotOutput(outputId = "barplot")
     )
   )
 )
@@ -86,14 +105,29 @@ ui <- fluidPage(
 # Define server 
 
 server <- function(input, output, session) {
+  
+  # Create a subset of data filtering for chosen title types
+  king_county_data_subset <- reactive({
+    req(input$selected_type)
+    filter(king_county_data, Vehicle_Primary_Use == input$selected_type)
+  })
+  
   output$scatterplot <- renderPlot({
     ggplot(data = king_county_data, aes_string(x = input$x, y = input$y, color = input$z)) +
-      geom_point()
+      geom_point(alpha = input$alpha) +
+      labs(title = "The Scatterplot")
   })
   
   output$densityplot <- renderPlot({
     ggplot(data = king_county_data, aes_string(x = input$x)) +
-      geom_density()
+      geom_density() +
+      labs(title = "The Density Plot")
+  })
+  
+  output$barplot <- renderPlot({
+    ggplot(data = king_county_data, aes_string(x = input$x, y = input$y, color = input$z)) +
+      geom_bar(stat = "identity", position = "dodge") + theme_minimal() +
+      labs(title = "The Barplot")
   })
 }
 
