@@ -37,6 +37,8 @@ electric_data$Percent_EV <- as.numeric(electric_data$Percent_EV)
 
 electric_data$NonEV_Total <- as.numeric(electric_data$NonEV_Total)
 
+electric_data$Total_Vehicles <- as.numeric(electric_data$Total_Vehicles)
+
 # Conversion to a factor
 electric_data$Vehicle_Primary_Use <- as.factor(electric_data$Vehicle_Primary_Use)
 
@@ -45,7 +47,7 @@ king_county_data <- subset(electric_data[-1, ], County == "King")
 
 # percent_map(counties$Percent.Electric.Vehicles, "darkgreen", "% EVs")
 
-# Define UI 
+# Define UI
 
 ui <- fluidPage(
   
@@ -95,11 +97,12 @@ ui <- fluidPage(
       )
     ),
     
-    # Output: Show scatterplot
+    # Output:
     mainPanel(
       plotOutput(outputId = "scatterplot"),
       plotOutput(outputId = "densityplot", height = 200),
-      plotOutput(outputId = "barplot")
+      plotOutput(outputId = "barplot"),
+      plotOutput(outputId = "lineplot")
     )
   )
 )
@@ -131,8 +134,29 @@ server <- function(input, output, session) {
       geom_bar(stat = "identity", position = "dodge") + theme_minimal() +
       labs(title = "The Barplot")
   })
+  
+  output$lineplot <- renderPlot({
+    # Filter data for electric trucks
+    truck_data <- electric_data %>%
+      filter(Vehicle_Primary_Use == "Truck")
+    
+    # Summarize data to get total count by Date for trucks
+    summarized_truck_data <- truck_data %>%
+      group_by(Date) %>%
+      summarize(Total_EV_Trucks = sum(EV_Total, na.rm = TRUE))
+    
+    # Create line plot for electric trucks
+    ggplot(data = summarized_truck_data, aes(x = Date, y = Total_EV_Trucks)) +
+      geom_line() + 
+      theme_minimal() +
+      labs(title = "Trend in Electric Truck Registrations Over Time",
+           x = "Date",
+           y = "Total Electric Truck Registrations")
+  })
 }
 
 # Create a Shiny app object 
 
 shinyApp(ui = ui, server = server)
+
+# summary(electric_data)
