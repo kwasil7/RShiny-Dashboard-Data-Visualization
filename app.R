@@ -102,7 +102,8 @@ ui <- fluidPage(
       plotOutput(outputId = "scatterplot"),
       plotOutput(outputId = "densityplot", height = 200),
       plotOutput(outputId = "barplot"),
-      plotOutput(outputId = "lineplot")
+      plotOutput(outputId = "lineplot"),
+      plotOutput(outputId = "lineplot_cars")
     )
   )
 )
@@ -151,7 +152,28 @@ server <- function(input, output, session) {
       theme_minimal() +
       labs(title = "Trend in Electric Truck Registrations Over Time",
            x = "Date",
-           y = "Total Electric Truck Registrations")
+           y = "Total Electric Truck Registrations") +
+      theme(text = element_text(size = 14))
+  })
+  
+  output$lineplot_cars <- renderPlot({
+    # Filter data for electric trucks
+    cars_data <- electric_data %>%
+      filter(Vehicle_Primary_Use == "Passenger")
+    
+    # Summarize data to get total count by Date for trucks
+    summarized_car_data <- cars_data %>%
+      group_by(Date) %>%
+      summarize(Total_EV_Cars = sum(EV_Total, na.rm = TRUE))
+    
+    # Create line plot for electric trucks
+    ggplot(data = summarized_car_data, aes(x = Date, y = Total_EV_Cars)) +
+      geom_line() + 
+      theme_minimal() +
+      labs(title = "Trend in Electric Cars Registrations Over Time",
+           x = "Date",
+           y = "Total Electric Cars Registrations") +
+      theme(text = element_text(size = 14))
   })
 }
 
