@@ -16,6 +16,7 @@ library(shiny)
 library(lubridate)
 library(leaflet)
 library(dplyr)
+library(USA.state.boundaries)
 # source("helpers.R")
 
 Sys.setlocale("LC_ALL", "English")
@@ -49,7 +50,10 @@ king_county_data <- subset(electric_data[-1, ], County == "King")
 # Filter for Pierce County data, excluding the first row
 pierce_county_data <- subset(electric_data[-1, ], County == "Pierce")
 
-# percent_map(counties$Percent.Electric.Vehicles, "darkgreen", "% EVs")
+# the map defined below
+wa_data <- electric_data %>% 
+  filter(State == "WA")
+
 
 # Define UI
 
@@ -189,11 +193,17 @@ server <- function(input, output, session) {
   })
   
   output$hist_bevs_king <- renderPlot({
-    hist(king_county_data$BEVs)
+    hist(king_county_data$BEVs, 
+         main = "Histogram of BEVs in King County",  # Add your title here
+         xlab = "BEVs",  # Label for the x-axis
+         ylab = "Frequency")  # Label for the y-axis
   })
   
   output$hist_phevs_king <- renderPlot({
-    hist(king_county_data$PHEVs)
+    hist(king_county_data$PHEVs,
+         main = "Histogram of PHEVs in King County",  # Add your title here
+         xlab = "PHEVs",  # Label for the x-axis
+         ylab = "Frequency")  # Label for the y-axis)
   })
   
   output$experimental_plot <- renderPlot({
@@ -205,7 +215,8 @@ server <- function(input, output, session) {
             axis.text.y = element_text(size = 8)) +  # Adjust y-axis text size
       labs(title = "Number of Electric Vehicles Over Time in Pierce County",
            x = "Date",
-           y = "Number of Electric Vehicles")
+           y = "Number of Electric Vehicles") +
+      theme(plot.title = element_text(face = "bold"))
   })
 }
 
