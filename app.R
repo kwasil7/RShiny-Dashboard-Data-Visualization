@@ -13,11 +13,12 @@ library(shinythemes)
 library(ggplot2)
 library(readr)
 library(shiny)
-library(dplyr)
 library(lubridate)
-library(maps)
-library(mapproj)
+library(leaflet)
+library(dplyr)
 # source("helpers.R")
+
+Sys.setlocale("LC_ALL", "English")
 
 # Load data frame
 electric_data <- read_csv("data/Electric_Vehicle_Population_Size_History_By_County.csv", 
@@ -45,11 +46,17 @@ electric_data$Vehicle_Primary_Use <- as.factor(electric_data$Vehicle_Primary_Use
 # Filter for King County data, excluding the first row
 king_county_data <- subset(electric_data[-1, ], County == "King")
 
+# Filter for Pierce County data, excluding the first row
+pierce_county_data <- subset(electric_data[-1, ], County == "Pierce")
+
 # percent_map(counties$Percent.Electric.Vehicles, "darkgreen", "% EVs")
 
 # Define UI
 
 ui <- fluidPage(
+  
+  tags$h1("Data Visualization Group 15 Project"),
+  tags$a("We use this dataset.", href = "https://data.wa.gov/Transportation/Electric-Vehicle-Population-Size-History-By-County/3d5d-sdqb"),
   
   theme = shinytheme("superhero"),
   
@@ -94,7 +101,8 @@ ui <- fluidPage(
         label = "Select vehicle type:",
         choices = c("Passenger", "Truck"),
         selected = "Passenger"
-      )
+      ),
+      sliderInput('years', 'Years', min = 2017, max = 2024, value = c(2017, 2019))
     ),
     
     # Output:
@@ -103,7 +111,11 @@ ui <- fluidPage(
       plotOutput(outputId = "densityplot", height = 200),
       plotOutput(outputId = "barplot"),
       plotOutput(outputId = "lineplot"),
-      plotOutput(outputId = "lineplot_cars")
+      plotOutput(outputId = "lineplot_cars"),
+      plotOutput(outputId = "hist_bevs_king"),
+      "The histogram below depicts the number of Plug-In Hybrid Electric Vehicles in the King County.",
+      plotOutput(outputId = "hist_phevs_king"),
+      plotOutput(outputId = "experimental_plot")
     )
   )
 )
@@ -174,6 +186,26 @@ server <- function(input, output, session) {
            x = "Date",
            y = "Total Electric Cars Registrations") +
       theme(text = element_text(size = 14))
+  })
+  
+  output$hist_bevs_king <- renderPlot({
+    hist(king_county_data$BEVs)
+  })
+  
+  output$hist_phevs_king <- renderPlot({
+    hist(king_county_data$PHEVs)
+  })
+  
+  output$experimental_plot <- renderPlot({
+    # Plot data using bars
+    ggplot(pierce_county_data, aes(x = pierce_county_data$Date, y = pierce_county_data$EV_Total)) +
+      geom_bar(stat = "identity", position = "dodge") + theme_minimal() +
+      scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +  # Format date breaks and labels
+      theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),  # Rotate x-axis text
+            axis.text.y = element_text(size = 8)) +  # Adjust y-axis text size
+      labs(title = "Number of Electric Vehicles Over Time in Pierce County",
+           x = "Date",
+           y = "Number of Electric Vehicles")
   })
 }
 
