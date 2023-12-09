@@ -14,12 +14,20 @@ library(ggplot2)
 library(readr)
 library(shiny)
 library(lubridate)
-library(leaflet)
 library(dplyr)
-library(USA.state.boundaries)
+library(leaflet)
+library(tidyverse)
+library(tidygeocoder)
+library(usmap)
+library(maps)
+library(mapdata)
+library(fuzzyjoin)
+library(scales)
 # source("helpers.R")
 
 Sys.setlocale("LC_ALL", "English")
+
+linebreaks <- function(n){HTML(strrep(br(), n))}
 
 # Load data frame
 electric_data <- read_csv("data/Electric_Vehicle_Population_Size_History_By_County.csv", 
@@ -51,12 +59,25 @@ king_county_data <- subset(electric_data[-1, ], County == "King")
 pierce_county_data <- subset(electric_data[-1, ], County == "Pierce")
 
 # the map defined below
-wa_data <- electric_data %>% 
-  filter(State == "WA")
+country_data <- read.csv("processed_country_data.csv")
 
+usa <- map_data('usa')
+
+# Getting map data for all US counties
+counties <- map_data("county")
+
+counties_data <- electric_data %>%
+  mutate(county = tolower(County),
+         state = tolower(State))
+
+electric_data_state_level <- electric_data %>%
+  group_by(State) %>%
+  summarise(EV_Total = sum(EV_Total, na.rm = TRUE))
+
+electric_data_state_level <- electric_data_state_level %>%
+  rename(state = State)
 
 # Define UI
-
 ui <- fluidPage(
   
   tags$h1("Data Visualization Group 15 Project"),
@@ -119,7 +140,17 @@ ui <- fluidPage(
       plotOutput(outputId = "hist_bevs_king"),
       "The histogram below depicts the number of Plug-In Hybrid Electric Vehicles in the King County.",
       plotOutput(outputId = "hist_phevs_king"),
-      plotOutput(outputId = "experimental_plot")
+      plotOutput(outputId = "experimental_plot"),
+      linebreaks(2),
+      titlePanel("The map of the US"),
+      plotOutput("map"),
+      titlePanel("Washington State, US"),
+      plotOutput("map_wa"),
+      plotOutput("map_wa_counties"),
+      titlePanel("Washington State Vehicle Registrations Across the US"),
+      plotOutput("map_states", height = "600px"),
+      linebreaks(2),
+      plotOutput("map_states_no_wa", height = "600px")
     )
   )
 )
@@ -218,6 +249,80 @@ server <- function(input, output, session) {
            y = "Number of Electric Vehicles") +
       theme(plot.title = element_text(face = "bold"))
   })
+  
+   output$map <- renderPlot({
+     plot_usmap(regions = "states") + 
+       labs(title = "U.S. States",
+            subtitle = "This is a blank map of the United States.") + 
+       theme(panel.background=element_blank())
+   })
+  
+   output$map_wa <- renderPlot({
+     plot_usmap(include = c("WA")) + 
+       labs(title = "The State of Washington") + 
+       theme(panel.background = element_rect(color = "blue"))
+   })
+   
+   output$map_wa_counties <- renderPlot({
+     
+     state <- map_data("state")
+     
+     washington <- subset(state, region=="washington")
+     counties <- map_data("county")
+     washington_county <- subset(counties, region=="washington")
+     
+     ggplot(data=washington, mapping=aes(x=long, y=lat, group=group)) + 
+       coord_fixed(1.3) + 
+       geom_polygon(color="black", fill="gray") + 
+       geom_polygon(data=washington_county, fill=NA, color="white") + 
+       geom_polygon(color="black", fill=NA) + 
+       ggtitle('Washington Map with Counties') + 
+       theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank(),
+             axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank())
+   })
+   
+   output$map_states <- renderPlot({
+     # Color-blind-friendly palette
+     cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+     
+     custom_labels <- c("0", "100", "5000", "10000", "5M")
+     
+     plot_usmap(data = electric_data_state_level, values = "EV_Total", regions = "states") +
+       scale_fill_continuous(
+         name = "Total EVs", 
+         limits = c(0, 6000000),
+         low = "#999999", 
+         high = "#56B4E9",
+         breaks = c(0, 100, 5000, 10000, 5000000),
+         labels = custom_labels
+       ) +
+       theme(legend.position = "bottom", text = element_text(size = 14)) +
+       labs(title = "Distribution of Electric Vehicles registered in Washington in the US")
+   })
+   
+   output$map_states_no_wa <- renderPlot({
+     # Color-blind-friendly palette
+     cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+     
+     custom_labels <- c("0", "100", "1000", "5000", "10000")
+     
+     # Filter out the rows corresponding to Washington (WA)
+     filtered_data <- electric_data_state_level %>%
+       filter(state != "WA")
+     
+     plot_usmap(data = filtered_data, values = "EV_Total", regions = "states") +
+       scale_fill_continuous(
+         name = "Total EVs", 
+         limits = c(0, 10000),
+         low = "#999999", 
+         high = "#56B4E9",
+         breaks = c(0, 100, 1000, 5000, 10000),
+         labels = custom_labels
+       ) +
+       theme(legend.position = "bottom", text = element_text(size = 14)) +
+       labs(title = "Distribution of Electric Vehicles registered in the US (excluding Washington)")
+   })
+   
 }
 
 # Create a Shiny app object 
