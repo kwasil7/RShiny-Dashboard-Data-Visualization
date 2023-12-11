@@ -307,7 +307,7 @@ server <- function(input, output, session) {
    
    output$map_states <- renderPlot({
      
-     custom_labels <- c("0", "100", "5000", "10000", "5M")
+     custom_labels <- c("1000", "3M", "5M")
      
      plot_usmap(data = electric_data_state_level, values = "EV_Total", regions = "states") +
        scale_fill_continuous(
@@ -315,16 +315,17 @@ server <- function(input, output, session) {
          limits = c(0, 6000000),
          low = "#999999", 
          high = "#56B4E9",
-         breaks = c(0, 100, 5000, 10000, 5000000),
+         breaks = c(1000, 3000000, 5000000),
          labels = custom_labels
        ) +
-       theme(legend.position = "bottom", text = element_text(size = 14)) +
+       guides(fill = guide_colourbar(barwidth = 40, barheight = 1)) +
+       theme(legend.position = "bottom", text = element_text(size = 12)) +
        labs(title = "Distribution of Electric Vehicles registered in Washington in the US")
    })
    
    output$map_states_no_wa <- renderPlot({
      
-     custom_labels <- c("0", "100", "1000", "5000", "10000")
+     custom_labels <- c("100", "1000", "3000", "7000")
      
      # Filter out the rows corresponding to Washington (WA)
      filtered_data <- electric_data_state_level %>%
@@ -333,12 +334,13 @@ server <- function(input, output, session) {
      plot_usmap(data = filtered_data, values = "EV_Total", regions = "states") +
        scale_fill_continuous(
          name = "Total EVs", 
-         limits = c(0, 10000),
+         limits = c(0, 7000),
          low = "#999999", 
          high = "#56B4E9",
-         breaks = c(0, 100, 1000, 5000, 10000),
+         breaks = c(100, 1000, 3000, 7000),
          labels = custom_labels
        ) +
+       guides(fill = guide_colourbar(barwidth = 20, barheight = 1)) +
        theme(legend.position = "bottom", text = element_text(size = 14)) +
        labs(title = "Distribution of Electric Vehicles registered in the Washington state in the US (excluding Washington)")
    })
