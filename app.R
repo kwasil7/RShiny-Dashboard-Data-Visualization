@@ -29,6 +29,9 @@ Sys.setlocale("LC_ALL", "English")
 
 linebreaks <- function(n){HTML(strrep(br(), n))}
 
+# Color-blind-friendly palette
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
 # Load data frame
 electric_data <- read_csv("data/Electric_Vehicle_Population_Size_History_By_County.csv", 
                           col_names = c("Date", "County", "State", "Vehicle_Primary_Use", "BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles", "Percent_EV"))
@@ -82,6 +85,8 @@ ui <- fluidPage(
   
   tags$h1("Data Visualization Group 15 Project"),
   tags$a("We use this dataset.", href = "https://data.wa.gov/Transportation/Electric-Vehicle-Population-Size-History-By-County/3d5d-sdqb"),
+  
+  downloadButton("downloadButton", "Download Report"),
   
   theme = shinytheme("superhero"),
   
@@ -159,6 +164,19 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   
+  output$downloadButton <- downloadHandler(
+    filename = function() {
+      "report.pdf" # The name of the file that will be downloaded
+    },
+    content = function(file) {
+      # The direct link to the Google Doc with permissions set so anyone with the link can view
+      doc_link <- "https://docs.google.com/document/d/1SMbbhp9OPY2cW_8Jpb9VrC_2hU1QeSoIgbnKxrJ3CF0/export?format=pdf"
+      
+      # Use httr to handle the request and download the file
+      httr::GET(url = doc_link, httr::write_disk(file, overwrite = TRUE))
+    }
+  )
+  
   # Create a subset of data filtering for chosen title types
   king_county_data_subset <- reactive({
     req(input$selected_type)
@@ -200,7 +218,13 @@ server <- function(input, output, session) {
       labs(title = "Trend in Electric Truck Registrations Over Time",
            x = "Date",
            y = "Total Electric Truck Registrations") +
-      theme(text = element_text(size = 14))
+      theme(text = element_text(size = 14)) + 
+      annotate("label", x = as.Date("2022-01-31"), y = max(summarized_truck_data$Total_EV_Trucks, na.rm = TRUE), 
+                                                      label = "Gas vehicle ban 2035 announced on Jan 2022", 
+                                                      color = "#D55E00", 
+                                                      size = 5,
+                                                      angle = 45, 
+                                                      fontface = "bold")
   })
   
   output$lineplot_cars <- renderPlot({
@@ -208,7 +232,7 @@ server <- function(input, output, session) {
     cars_data <- electric_data %>%
       filter(Vehicle_Primary_Use == "Passenger")
     
-    # Summarize data to get total count by Date for trucks
+    # Summarize data to get total count by Date for cars
     summarized_car_data <- cars_data %>%
       group_by(Date) %>%
       summarize(Total_EV_Cars = sum(EV_Total, na.rm = TRUE))
@@ -282,8 +306,6 @@ server <- function(input, output, session) {
    })
    
    output$map_states <- renderPlot({
-     # Color-blind-friendly palette
-     cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
      
      custom_labels <- c("0", "100", "5000", "10000", "5M")
      
@@ -301,8 +323,6 @@ server <- function(input, output, session) {
    })
    
    output$map_states_no_wa <- renderPlot({
-     # Color-blind-friendly palette
-     cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
      
      custom_labels <- c("0", "100", "1000", "5000", "10000")
      
@@ -320,7 +340,7 @@ server <- function(input, output, session) {
          labels = custom_labels
        ) +
        theme(legend.position = "bottom", text = element_text(size = 14)) +
-       labs(title = "Distribution of Electric Vehicles registered in the US (excluding Washington)")
+       labs(title = "Distribution of Electric Vehicles registered in the Washington state in the US (excluding Washington)")
    })
    
 }
