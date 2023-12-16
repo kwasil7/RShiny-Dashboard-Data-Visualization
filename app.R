@@ -36,6 +36,9 @@ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
 electric_data <- read_csv("data/Electric_Vehicle_Population_Size_History_By_County.csv", 
                           col_names = c("Date", "County", "State", "Vehicle_Primary_Use", "BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles", "Percent_EV"))
 
+# Remove the first row
+electric_data <- electric_data[-1, ]
+
 # Convert Date from character to Date object using lubridate's mdy(), for the entire dataframe
 electric_data$Date <- mdy(electric_data$Date)
 
@@ -56,10 +59,10 @@ electric_data$Total_Vehicles <- as.numeric(electric_data$Total_Vehicles)
 electric_data$Vehicle_Primary_Use <- as.factor(electric_data$Vehicle_Primary_Use)
 
 # Filter for King County data, excluding the first row
-king_county_data <- subset(electric_data[-1, ], County == "King")
+king_county_data <- subset(electric_data, County == "King")
 
-# Filter for Pierce County data, excluding the first row
-pierce_county_data <- subset(electric_data[-1, ], County == "Pierce")
+# Filter for Pierce County data
+pierce_county_data <- subset(electric_data, County == "Pierce")
 
 # the map defined below
 country_data <- read.csv("processed_country_data.csv")
@@ -81,83 +84,81 @@ electric_data_state_level <- electric_data_state_level %>%
   rename(state = State)
 
 # Define UI
-ui <- fluidPage(
+ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("superhero"),
+                 
+  tabPanel("Home",
+          fluidPage(
+            tags$h1("Welcome to the EV Data Dashboard"),
+            tags$a("Click here for the dataset source", href = "https://data.wa.gov/Transportation/Electric-Vehicle-Population-Size-History-By-County/3d5d-sdqb"),
+            downloadButton("downloadButton", "Download Report"),
+            linebreaks(2),
+            tags$h4("In January 2023, the number of electric vehicles registered in Washington reached more than 100.000", style = "font-weight: bold;"),
+            tags$p("However, when it comes to the percent of electric vehicles (for example, in King County) versus their non-electric counterparts 
+                   the plot may look less impressive."),
+          ),
+          mainPanel(
+            plotOutput(outputId = "jan_2023"),
+            tableOutput(outputId = "jan_2023_table"),
+            plotOutput(outputId = "king_percent"),
+            plotOutput(outputId = "king_plot"),
+            tags$p("King County is the most populated county in Washington"),
+            plotOutput(outputId = "yakima_plot"),
+            tags$p("Yakima County is the most populated rural county in the state."),
+            plotOutput(outputId = "garfield_plot"),
+            tags$p("Garfield County is the least populated county in Washington. It is also a rural county."),
+            plotOutput(outputId = "island_plot"),
+            tags$p("Island County is composed entirely of islands and classied as rural."),
+          )
+  ),
   
-  tags$h1("Data Visualization Group 15 Project"),
-  tags$a("We use this dataset.", href = "https://data.wa.gov/Transportation/Electric-Vehicle-Population-Size-History-By-County/3d5d-sdqb"),
+  tabPanel("Analysis",
+          sidebarLayout(
+            sidebarPanel(
+              helpText("Explore the Electric Vehicle Population Size History By County Dataset"),
+              selectInput(inputId = "y", label = "Y-axis:", choices = c("BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles"), selected = "EV_Total"),
+              selectInput(inputId = "x", label = "X-axis:", choices = c("BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles", "Date"), selected = "Date"),
+              selectInput(inputId = "z", label = "Color by:", choices = c("Vehicle_Primary_Use", "BEVs", "PHEVs"), selected = "Vehicle_Primary_Use"),
+              sliderInput(inputId = "alpha", label = "Alpha:", min = 0, max = 1, value = 0.5),
+              selectInput(inputId = "selected_type", label = "Select vehicle type:", choices = c("Passenger", "Truck"), selected = "Passenger"),
+              sliderInput('years', 'Years', min = 2017, max = 2024, value = c(2017, 2024))
+            ),
+            mainPanel(
+              plotOutput(outputId = "scatterplot"),
+              plotOutput(outputId = "densityplot", height = 200),
+              plotOutput(outputId = "lineplot"),
+              plotOutput(outputId = "lineplot_cars"),
+              plotOutput(outputId = "hist_bevs_king"),
+              plotOutput(outputId = "hist_phevs_king"),
+              plotOutput(outputId = "pierce_plot"),
+              plotOutput(outputId = "yakima_lollipop_plot")
+            )
+          )
+  ),
   
-  downloadButton("downloadButton", "Download Report"),
-  
-  theme = shinytheme("superhero"),
-  
-  sidebarLayout(
-    
-    # Inputs: Select variables to plot
-    sidebarPanel(
-      
-      helpText("Group 15 Dataset"),
-      
-      # Select variable for y-axis
-      selectInput(
-        inputId = "y",
-        label = "Y-axis:",
-        choices = c("BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles"),
-        selected = "EV_Total"
-      ),
-      # Select variable for x-axis
-      selectInput(
-        inputId = "x",
-        label = "X-axis:",
-        choices = c("BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles", "Date"),
-        selected = "BEVs"
-      ),
-      # Select variables for colors
-      selectInput(
-        inputId = "z",
-        label = "Color by:",
-        choices = c("Vehicle_Primary_Use", "BEVs", "PHEVs"),
-        selected = "Vehicle_Primary_Use"
-      ),
-      # Alpha for the points
-      sliderInput(
-        inputId = "alpha",
-        label = "Alpha:",
-        min = 0, max = 1,
-        value = 0.5
-      ),
-      # Select which types of vehicle use to plot
-      selectInput(
-        inputId = "selected_type",
-        label = "Select vehicle type:",
-        choices = c("Passenger", "Truck"),
-        selected = "Passenger"
-      ),
-      sliderInput('years', 'Years', min = 2017, max = 2024, value = c(2017, 2019))
-    ),
-    
-    # Output:
-    mainPanel(
-      plotOutput(outputId = "scatterplot"),
-      plotOutput(outputId = "densityplot", height = 200),
-      plotOutput(outputId = "barplot"),
-      plotOutput(outputId = "lineplot"),
-      plotOutput(outputId = "lineplot_cars"),
-      plotOutput(outputId = "hist_bevs_king"),
-      "The histogram below depicts the number of Plug-In Hybrid Electric Vehicles in the King County.",
-      plotOutput(outputId = "hist_phevs_king"),
-      plotOutput(outputId = "experimental_plot"),
-      linebreaks(2),
-      titlePanel("The map of the US"),
-      plotOutput("map"),
-      titlePanel("Washington State, US"),
-      plotOutput("map_wa"),
-      plotOutput("map_wa_counties"),
-      titlePanel("Washington State Vehicle Registrations Across the US"),
-      plotOutput("map_states", height = "600px"),
-      linebreaks(2),
-      plotOutput("map_states_no_wa", height = "600px")
-    )
+  tabPanel("Maps",
+           fluidRow(
+             column(width = 12,
+                imageOutput("rural_wa", height = "100%"),
+                tags$br(),
+                "Sources: ",
+                tags$a("Washington State Department of Health", href='https://doh.wa.gov/sites/default/files/legacy/Documents/Pubs/609003.pdf'),
+                " and ",
+                tags$a("Wikipedia", href='https://en.wikipedia.org/wiki/List_of_counties_in_Washington'),
+                tags$br(),
+                "There are 9 urban counties and 30 rural counties in Washington state. King County is the most populated in the state.
+                Yakima is the most populated rural county with 257.001 people.",
+                tags$br(), tags$br(),
+                titlePanel("Washington State, US"),
+                plotOutput("map_wa"),
+                plotOutput("map_wa_counties"),
+                titlePanel("Washington State Vehicle Registrations Across the US"),
+                plotOutput("map_states", height = "600px"),
+                plotOutput("map_states_no_wa", height = "600px")
+             )
+           )
   )
+  
+  # Add more tabPanel for other pages if needed
 )
 
 # Define server 
@@ -193,12 +194,6 @@ server <- function(input, output, session) {
     ggplot(data = king_county_data, aes_string(x = input$x)) +
       geom_density() +
       labs(title = "The Density Plot")
-  })
-  
-  output$barplot <- renderPlot({
-    ggplot(data = king_county_data, aes_string(x = input$x, y = input$y, color = input$z)) +
-      geom_bar(stat = "identity", position = "dodge") + theme_minimal() +
-      labs(title = "The Barplot")
   })
   
   output$lineplot <- renderPlot({
@@ -261,7 +256,7 @@ server <- function(input, output, session) {
          ylab = "Frequency")  # Label for the y-axis)
   })
   
-  output$experimental_plot <- renderPlot({
+  output$pierce_plot <- renderPlot({
     # Plot data using bars
     ggplot(pierce_county_data, aes(x = pierce_county_data$Date, y = pierce_county_data$EV_Total)) +
       geom_bar(stat = "identity", position = "dodge") + theme_minimal() +
@@ -269,6 +264,67 @@ server <- function(input, output, session) {
       theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),  # Rotate x-axis text
             axis.text.y = element_text(size = 8)) +  # Adjust y-axis text size
       labs(title = "Number of Electric Vehicles Over Time in Pierce County",
+           x = "Date",
+           y = "Number of Electric Vehicles") +
+      theme(plot.title = element_text(face = "bold"))
+  })
+  
+  output$king_plot <- renderPlot({
+    # Plot data using bars
+    ggplot(king_county_data, aes(x = king_county_data$Date, y = king_county_data$EV_Total)) +
+      geom_bar(stat = "identity", position = "dodge") + theme_minimal() +
+      scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +  # Format date breaks and labels
+      theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),  # Rotate x-axis text
+            axis.text.y = element_text(size = 8)) +  # Adjust y-axis text size
+      labs(title = "Number of Electric Vehicles Over Time in King County",
+           x = "Date",
+           y = "Number of Electric Vehicles") +
+      theme(plot.title = element_text(face = "bold"))
+  })
+  
+  output$yakima_plot <- renderPlot({
+    
+    yakima_county_data <- subset(electric_data, County == "Yakima")
+    
+    # Plot data using bars
+    ggplot(yakima_county_data, aes(x = yakima_county_data$Date, y = yakima_county_data$EV_Total)) +
+      geom_bar(stat = "identity", position = "dodge") + theme_minimal() +
+      scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +  # Format date breaks and labels
+      theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),  # Rotate x-axis text
+            axis.text.y = element_text(size = 8)) +  # Adjust y-axis text size
+      labs(title = "Number of Electric Vehicles Over Time in Yakima County",
+           x = "Date",
+           y = "Number of Electric Vehicles") +
+      theme(plot.title = element_text(face = "bold"))
+  })
+  
+  output$garfield_plot <- renderPlot({
+    
+    garfield_county_data <- subset(electric_data, County == "Garfield")
+    
+    # Plot data using bars
+    ggplot(garfield_county_data, aes(x = garfield_county_data$Date, y = garfield_county_data$EV_Total)) +
+      geom_bar(stat = "identity", position = "dodge") + theme_minimal() +
+      scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +  # Format date breaks and labels
+      theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),  # Rotate x-axis text
+            axis.text.y = element_text(size = 8)) +  # Adjust y-axis text size
+      labs(title = "Number of Electric Vehicles Over Time in Garfield County",
+           x = "Date",
+           y = "Number of Electric Vehicles") +
+      theme(plot.title = element_text(face = "bold"))
+  })
+  
+  output$island_plot <- renderPlot({
+    
+    island_county_data <- subset(electric_data, County == "Island")
+    
+    # Plot data using bars
+    ggplot(island_county_data, aes(x = island_county_data$Date, y = island_county_data$EV_Total)) +
+      geom_bar(stat = "identity", position = "dodge") + theme_minimal() +
+      scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +  # Format date breaks and labels
+      theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),  # Rotate x-axis text
+            axis.text.y = element_text(size = 8)) +  # Adjust y-axis text size
+      labs(title = "Number of Electric Vehicles Over Time in Island County",
            x = "Date",
            y = "Number of Electric Vehicles") +
       theme(plot.title = element_text(face = "bold"))
@@ -344,6 +400,83 @@ server <- function(input, output, session) {
        theme(legend.position = "bottom", text = element_text(size = 14)) +
        labs(title = "Distribution of Electric Vehicles registered in the Washington state in the US (excluding Washington)")
    })
+   
+   output$jan_2023 <- renderPlot({
+     # Filter for January 31st of each year and summarize
+     year_data <- electric_data %>%
+       filter(format(Date, "%m-%d") == "01-31" & 
+                year(Date) %in% c(2017, 2018, 2019, 2020, 2021, 2022, 2023)) %>%
+       group_by(Year = year(Date)) %>%
+       summarize(Total_EV = sum(EV_Total, na.rm = TRUE))
+     
+     # Create the bar plot
+     ggplot(year_data, aes(x = as.factor(Year), y = Total_EV)) + 
+       geom_bar(stat = "identity", fill = "#56B4E9") +
+       labs(title = "Electric Vehicles Total Each Year (2017-2023)", 
+            x = "Year", 
+            y = "Total Registered Electric Vehicles") +
+       theme_minimal()
+   })
+   
+   output$jan_2023_table <- renderTable({
+     
+     filter_date <- as.Date("2023-01-31")
+     
+       electric_data %>%
+         select(-State) %>%
+         filter(Date == filter_date, EV_Total > 1000) %>%
+         mutate(Date = as.character(Date)) %>%
+         head(10)
+     },
+     caption = "Data for January 31, 2023 (first 10 rows)"
+   )
+   
+   output$king_percent <- renderPlot({
+     # Filter for December 31st of each year in King County
+     king_percent_data <- electric_data %>%
+       filter(County == "King" & 
+                format(Date, "%m-%d") == "12-31" & 
+                year(Date) %in% c(2017, 2018, 2019, 2020, 2021, 2022)) %>%
+       mutate(Year = year(Date)) %>%
+       select(Year, Percent_EV)  # Select only the Year and Percent_EV
+     
+     # Create the bar plot
+     ggplot(king_percent_data, aes(x = as.factor(Year), y = Percent_EV)) + 
+       geom_col(fill = "#56B4E9") +
+       labs(title = "Percentage of Electric Vehicles at Year-End in King County (2017-2022)", 
+            x = "Year", 
+            y = "Percentage of Electric Vehicles") +
+       theme_minimal()
+   })
+   
+   
+   output$rural_wa <- renderImage({
+     list(
+       src = "images/rural_wa.png",  # Adjust the path and file name as needed
+       contentType = "image/png",
+       width = 800
+     )
+   }, deleteFile = FALSE)
+   
+   output$yakima_lollipop_plot <- renderPlot({
+     # Filter for Yakima County data and aggregate by year
+     yakima_yearly_data <- electric_data %>%
+       filter(County == "Yakima") %>%
+       group_by(Year = year(Date)) %>%
+       summarize(Total_PHEVs = sum(PHEVs, na.rm = TRUE))
+     
+     # Create the lollipop plot for PHEVs over the years
+     ggplot(yakima_yearly_data, aes(x = as.factor(Year), y = Total_PHEVs)) +
+       geom_segment(aes(xend = as.factor(Year), yend = 0), color = "grey") +
+       geom_point(color = "#56B4E9", size = 3) +
+       labs(title = "Yearly Count of PHEVs in Yakima County",
+            x = "Year",
+            y = "Number of PHEVs") +
+       theme_minimal() +
+       theme(axis.title.x=element_text(size=13), 
+             axis.title.y=element_text(size=13))
+   })
+   
    
 }
 
