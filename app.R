@@ -108,6 +108,8 @@ ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("supe
             tags$p("Garfield County is the least populated county in Washington. It is also a rural county."),
             plotOutput(outputId = "island_plot"),
             tags$p("Island County is composed entirely of islands and classied as rural."),
+            "What about a total number of registered vehicles across time?",
+            plotOutput(outputId = "total_plot")
           )
   ),
   
@@ -402,7 +404,7 @@ server <- function(input, output, session) {
    })
    
    output$jan_2023 <- renderPlot({
-     # Filter for January 31st of each year and summarize
+     # Filter for January 31st of each year
      year_data <- electric_data %>%
        filter(format(Date, "%m-%d") == "01-31" & 
                 year(Date) %in% c(2017, 2018, 2019, 2020, 2021, 2022, 2023)) %>%
@@ -415,7 +417,8 @@ server <- function(input, output, session) {
        labs(title = "Electric Vehicles Total Each Year (2017-2023)", 
             x = "Year", 
             y = "Total Registered Electric Vehicles") +
-       theme_minimal()
+       theme_minimal() +
+       theme(plot.title = element_text(face = "bold"))
    })
    
    output$jan_2023_table <- renderTable({
@@ -446,7 +449,9 @@ server <- function(input, output, session) {
        labs(title = "Percentage of Electric Vehicles at Year-End in King County (2017-2022)", 
             x = "Year", 
             y = "Percentage of Electric Vehicles") +
-       theme_minimal()
+       scale_y_continuous(labels = scales::percent_format(scale = 1),  limits = c(0, 100)) +
+       theme_minimal() +
+       theme(plot.title = element_text(face = "bold"))
    })
    
    
@@ -477,7 +482,22 @@ server <- function(input, output, session) {
              axis.title.y=element_text(size=13))
    })
    
-   
+   output$total_plot <- renderPlot({
+     # Filter data for the end of each year
+     end_of_year_data <- electric_data %>%
+       mutate(Year = year(Date)) %>%
+       group_by(Year) %>%
+       filter(Date == max(Date)) %>%
+       summarise(Total_Vehicles = sum(Total_Vehicles, na.rm = TRUE)) %>%
+       ungroup()
+     
+     ggplot(end_of_year_data, aes(x = Year, y = Total_Vehicles)) +
+       geom_line(color = "#0072B2") +
+       xlab("Year") +
+       ylab("Total Vehicles Registered by Year-End") +
+       theme_minimal() +
+       theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  })
 }
 
 # Create a Shiny app object 
