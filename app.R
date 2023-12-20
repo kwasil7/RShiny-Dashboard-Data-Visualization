@@ -11,6 +11,7 @@
 ## ui.R ##
 library(shinythemes)
 library(ggplot2)
+library(gganimate)
 library(readr)
 library(shiny)
 library(lubridate)
@@ -122,7 +123,13 @@ ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("supe
               selectInput(inputId = "z", label = "Color by:", choices = c("Vehicle_Primary_Use", "BEVs", "PHEVs"), selected = "Vehicle_Primary_Use"),
               sliderInput(inputId = "alpha", label = "Alpha:", min = 0, max = 1, value = 0.5),
               selectInput(inputId = "selected_type", label = "Select vehicle type:", choices = c("Passenger", "Truck"), selected = "Passenger"),
-              sliderInput('years', 'Years', min = 2017, max = 2024, value = c(2017, 2024))
+              sliderInput('years', 'Years', min = 2017, max = 2024, value = c(2017, 2024)),
+              selectInput(inputId = "date_interval",
+                          label = "Date Interval:",
+                          choices = c("Yearly", "Quarterly", "Monthly"),
+                          selected = "Monthly")
+              
+              
             ),
             mainPanel(
               plotOutput(outputId = "scatterplot"),
@@ -259,12 +266,34 @@ server <- function(input, output, session) {
   })
   
   output$pierce_plot <- renderPlot({
+    # Determine date breaks and labels based on selected interval
+    date_interval <- input$date_interval
+    date_breaks <- switch(date_interval,
+                          "Yearly" = "1 year",
+                          "Quarterly" = "3 months",
+                          "Monthly" = "1 month")
+    
+    date_labels <- switch(date_interval,
+                          "Yearly" = "%Y",
+                          "Quarterly" = "%b %Y",
+                          "Monthly" = "%b %Y")
+    
+    # Create a new column for grouping based on the selected interval
+    pierce_county_data$DateGroup <- cut(as.Date(pierce_county_data$Date), breaks = date_breaks)
+    
+    # Convert DateGroup to class "Date"
+    pierce_county_data$DateGroup <- as.Date(pierce_county_data$DateGroup)
+    
+    # Get unique levels for discrete x-axis
+    unique_levels <- unique(pierce_county_data$DateGroup)
+    
     # Plot data using bars
-    ggplot(pierce_county_data, aes(x = pierce_county_data$Date, y = pierce_county_data$EV_Total)) +
-      geom_bar(stat = "identity", position = "dodge") + theme_minimal() +
-      scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +  # Format date breaks and labels
-      theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),  # Rotate x-axis text
-            axis.text.y = element_text(size = 8)) +  # Adjust y-axis text size
+    ggplot(pierce_county_data, aes(x = DateGroup, y = EV_Total)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      theme_minimal() +
+      scale_x_date(breaks = unique_levels, labels = format(unique_levels, date_labels), date_labels = date_labels) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+            axis.text.y = element_text(size = 8)) +
       labs(title = "Number of Electric Vehicles Over Time in Pierce County",
            x = "Date",
            y = "Number of Electric Vehicles") +
