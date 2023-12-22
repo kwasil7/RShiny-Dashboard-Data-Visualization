@@ -186,6 +186,7 @@ ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("supe
                selectInput("dataCategory", "Select Vehicle Category:",
                            choices = c("BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles"),
                            selected = "EV_Total")
+               #, checkboxInput("togglePercentage", "Show as Percentage of Population", value = FALSE)
              ),
              mainPanel(
                plotOutput("countyHeatmap"),
@@ -557,7 +558,7 @@ server <- function(input, output, session) {
    
    
    output$countyHeatmap <- renderPlot({
-     req(input$yearSlider)
+     req(input$yearSlider, input$dataCategory)
      
      # Filter data for the selected year and for Washington state
      wa_county_data <- electric_data %>%
@@ -635,15 +636,12 @@ server <- function(input, output, session) {
      ggplot(wa_county_data, aes(x = reorder(County, Selected_Total), y = Selected_Total, fill = County)) +
        geom_bar(stat = "identity") +
        scale_fill_manual(values = county_colors) +
-       labs(title = paste("Top 10 Counties for", input$dataCategory, "Registrations in Washington State in", input$yearSlider),
+       labs(title = paste("Top 10 Counties for", input$dataCategory, "Registrations in Washington State from", input$yearSlider[1], "to", input$yearSlider[2]),
             x = "County",
             y = "Total Registrations") +
        theme_minimal() +
        theme(axis.text.x = element_text(angle = 45, hjust = 1))
    })
-   
-   
-   
    
 }
 
