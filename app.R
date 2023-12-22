@@ -27,6 +27,7 @@ library(fuzzyjoin)
 library(scales)
 library(sf)
 library(tmaptools)
+library(RColorBrewer)
 # source("helpers.R")
 
 Sys.setlocale("LC_ALL", "English")
@@ -86,6 +87,14 @@ electric_data_state_level <- electric_data %>%
 
 electric_data_state_level <- electric_data_state_level %>%
   rename(state = State)
+
+# Define a named vector of colors for counties
+county_colors <- setNames(c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+                            "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"),
+                          c("King", "Pierce", "Clark", "Whatcom", 
+                            "Snohomish", "Spokane", "Thurston", "Yakima", 
+                            "Island", "Benton"))
+
 
 # Define UI
 ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("superhero"),
@@ -180,7 +189,9 @@ ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("supe
              ),
              mainPanel(
                plotOutput("countyHeatmap"),
-               plotOutput("waBubbleMap"))
+               plotOutput("stackedAreaPlot"),
+               plotOutput("countyBarGraph")
+             )
            ))
   
   # Add more tabPanel for other pages if needed
@@ -568,7 +579,7 @@ server <- function(input, output, session) {
    })
    
    
-   output$waBubbleMap <- renderPlot({
+   output$stackedAreaPlot <- renderPlot({
      
      req(input$yearSlider, input$date_interval, input$dataCategory)
      
@@ -594,7 +605,7 @@ server <- function(input, output, session) {
      # Create stacked area plot
      ggplot(summarized_data, aes(x = DateGroup, y = Selected_Total, fill = County)) +
        geom_area(alpha = 0.8) +
-       scale_fill_brewer(palette = "Set1") +
+       scale_fill_manual(values = county_colors) +
        labs(title = paste(input$dataCategory, "in Selected Counties"),
             subtitle = paste("From", input$yearSlider[1], "to", input$yearSlider[2]),
             x = "Date",
@@ -602,6 +613,38 @@ server <- function(input, output, session) {
        theme_minimal() +
        theme(legend.title = element_blank())
    })
+   
+   
+   
+   output$countyBarGraph <- renderPlot({
+     req(input$yearSlider, input$dataCategory)
+     
+     # Filter and summarize data
+     wa_county_data <- electric_data %>%
+       filter(year(Date) == input$yearSlider, State == "WA") %>%
+       group_by(County) %>%
+       summarise(Selected_Total = sum(!!sym(input$dataCategory), na.rm = TRUE)) %>%
+       ungroup() %>%
+       arrange(desc(Selected_Total)) %>%
+       top_n(10, Selected_Total)  # Select the top 10 counties
+     
+     # Set a color palette (excluding white)
+     color_palette <- brewer.pal(min(10, n_distinct(wa_county_data$County)), "Set3")
+     
+     # Create the bar graph
+     ggplot(wa_county_data, aes(x = reorder(County, Selected_Total), y = Selected_Total, fill = County)) +
+       geom_bar(stat = "identity") +
+       scale_fill_manual(values = county_colors) +
+       labs(title = paste("Top 10 Counties for", input$dataCategory, "Registrations in Washington State in", input$yearSlider),
+            x = "County",
+            y = "Total Registrations") +
+       theme_minimal() +
+       theme(axis.text.x = element_text(angle = 45, hjust = 1))
+   })
+   
+   
+   
+   
 }
 
 # Create a Shiny app object 
