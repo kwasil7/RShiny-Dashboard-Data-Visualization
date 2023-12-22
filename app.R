@@ -14,6 +14,7 @@ library(ggplot2)
 library(gganimate)
 library(readr)
 library(shiny)
+library(shinyjs)
 library(lubridate)
 library(dplyr)
 library(leaflet)
@@ -24,6 +25,8 @@ library(maps)
 library(mapdata)
 library(fuzzyjoin)
 library(scales)
+library(sf)
+library(tmaptools)
 # source("helpers.R")
 
 Sys.setlocale("LC_ALL", "English")
@@ -165,7 +168,20 @@ ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("supe
                 plotOutput("map_states_no_wa", height = "600px")
              )
            )
-  )
+  ),
+  tabPanel("Interactive Graphs",
+           sidebarLayout(
+             sidebarPanel(
+               sliderInput("yearSlider", "Select Year:",
+                           min = 2017, max = 2024, value = c(2017, 2024)),
+               selectInput("dataCategory", "Select Vehicle Category:",
+                           choices = c("BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles"),
+                           selected = "EV_Total")
+             ),
+             mainPanel(
+               plotOutput("countyHeatmap"),
+               plotOutput("waBubbleMap"))
+           ))
   
   # Add more tabPanel for other pages if needed
 )
@@ -527,6 +543,65 @@ server <- function(input, output, session) {
        theme_minimal() +
        theme(axis.text.x = element_text(angle = 45, hjust = 1))
   })
+   
+   
+   output$countyHeatmap <- renderPlot({
+     req(input$yearSlider)
+     
+     # Filter data for the selected year and for Washington state
+     wa_county_data <- electric_data %>%
+       filter(year(Date) == input$yearSlider, State == "WA") %>%
+       group_by(County) %>%
+       summarise(EV_Total_County = sum(!!sym(input$dataCategory), na.rm = TRUE)) %>%
+       ungroup()
+     
+     # Plot of heatmap for counties in Washington
+     ggplot(wa_county_data, aes(x = County, y = "", fill = EV_Total_County)) +
+       geom_tile() +
+       scale_fill_gradient(low = "blue", high = "red") +
+       labs(title = paste("Heatmap of", input$dataCategory, "Registrations by County in Washington State from", input$yearSlider[1], "to", input$yearSlider[2]),
+            x = "County",
+            y = "",
+            fill = "Registrations") +
+       theme_minimal() +
+       theme(axis.text.x = element_text(angle = 45, hjust = 1))
+   })
+   
+   
+   output$waBubbleMap <- renderPlot({
+     
+     req(input$yearSlider, input$date_interval, input$dataCategory)
+     
+     # Filter data for the selected year range and specific counties
+     filtered_data <- electric_data %>%
+       filter(year(Date) >= input$yearSlider[1], 
+              year(Date) <= input$yearSlider[2], 
+              County %in% c("King", "Pierce", "Clark", "Whatcom", "Snohomish", "Thurston", "Yakima"), 
+              State == "WA")
+     
+     # Determine date breaks based on selected interval
+     date_breaks <- switch(input$date_interval,
+                           "Yearly" = "year",
+                           "Quarterly" = "quarter",
+                           "Monthly" = "month")
+     
+     # Group and summarize data based on the selected data category
+     summarized_data <- filtered_data %>%
+       mutate(DateGroup = floor_date(Date, unit = date_breaks)) %>%
+       group_by(DateGroup, County) %>%
+       summarize(Selected_Total = sum(!!sym(input$dataCategory), na.rm = TRUE), .groups = "drop")
+     
+     # Create stacked area plot
+     ggplot(summarized_data, aes(x = DateGroup, y = Selected_Total, fill = County)) +
+       geom_area(alpha = 0.8) +
+       scale_fill_brewer(palette = "Set1") +
+       labs(title = paste(input$dataCategory, "in Selected Counties"),
+            subtitle = paste("From", input$yearSlider[1], "to", input$yearSlider[2]),
+            x = "Date",
+            y = paste(input$dataCategory, "Registrations")) +
+       theme_minimal() +
+       theme(legend.title = element_blank())
+   })
 }
 
 # Create a Shiny app object 
