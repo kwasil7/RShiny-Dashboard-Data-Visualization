@@ -28,6 +28,7 @@ library(scales)
 library(sf)
 library(tmaptools)
 library(RColorBrewer)
+library(reshape2)
 # source("helpers.R")
 
 Sys.setlocale("LC_ALL", "English")
@@ -189,11 +190,37 @@ ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("supe
                #, checkboxInput("togglePercentage", "Show as Percentage of Population", value = FALSE)
              ),
              mainPanel(
-               plotOutput("countyHeatmap"),
+               plotOutput("countyBarGraph"),
                plotOutput("stackedAreaPlot"),
-               plotOutput("countyBarGraph")
+               plotOutput("countyBoxplot"),
+               plotOutput("timeSeriesPlot"),
+               fluidRow(
+                 column(6, plotOutput("evTimeSeriesPlot")),
+                 column(6, plotOutput("nonEvTimeSeriesPlot"))
+               ),
+               plotOutput("countyHeatmap")
              )
-           ))
+           )),
+  
+  tabPanel("Registration Trends Heatmap",
+           sidebarLayout(
+             sidebarPanel(
+               selectInput("selectedYear", "Select Year:",
+                           choices = sort(unique(format(electric_data$Date, "%Y"))),
+                           selected = max(format(electric_data$Date, "%Y")))
+               ,
+               selectInput("selectedVehicleType", "Select Vehicle Type:",
+                           choices = c("BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles"),
+                           selected = "EV_Total"))
+               ,
+             mainPanel(
+               #plotOutput("monthlyEVHeatmap"),
+               plotOutput("allTimeVehicleTypeHeatmap"),
+               #plotOutput("newMonthlyHeatmap"),
+               plotOutput("monthlyRegistrationsHeatmap")
+             )
+           )
+  )
   
   # Add more tabPanel for other pages if needed
 )
@@ -642,6 +669,222 @@ server <- function(input, output, session) {
        theme_minimal() +
        theme(axis.text.x = element_text(angle = 45, hjust = 1))
    })
+   
+   
+   
+   output$countyBoxplot <- renderPlot({
+     req(input$yearSlider, input$dataCategory)
+     
+     # Filter data for the selected year range and specific counties in Washington state
+     filtered_data <- electric_data %>%
+       filter(year(Date) >= input$yearSlider[1], 
+              year(Date) <= input$yearSlider[2], 
+              State == "WA") %>%
+       group_by(County) %>%
+       summarise(Selected_Total = sum(!!sym(input$dataCategory), na.rm = TRUE)) %>%
+       ungroup()
+     
+     # Create the boxplot
+     ggplot(filtered_data, aes(x = County, y = Selected_Total, fill = County)) +
+       geom_boxplot() +
+       scale_fill_brewer(palette = "Set3") +
+       labs(title = paste("Distribution of", input$dataCategory, "by County"),
+            x = "County",
+            y = paste(input$dataCategory, "Total")) +
+       theme_minimal() +
+       theme(axis.text.x = element_text(angle = 45, hjust = 1))
+   })
+   
+   output$timeSeriesPlot <- renderPlot({
+     req(input$yearSlider, input$dataCategory)
+     
+     # Filter data for the selected year range and specific counties in Washington state
+     filtered_data <- electric_data %>%
+       filter(year(Date) >= input$yearSlider[1], 
+              year(Date) <= input$yearSlider[2], 
+              State == "WA") %>%
+       group_by(Date) %>%
+       summarise(Selected_Total = sum(!!sym(input$dataCategory), na.rm = TRUE)) %>%
+       ungroup()
+     
+     # Create the time series plot
+     ggplot(filtered_data, aes(x = Date, y = Selected_Total)) +
+       geom_line(color = "blue") +
+       labs(title = paste("Time Series of", input$dataCategory, "in Washington State"),
+            x = "Date",
+            y = paste(input$dataCategory, "Total")) +
+       theme_minimal() +
+       theme(axis.text.x = element_text(angle = 45, hjust = 1))
+   })
+   
+   
+   # EV Time Series Plot
+   output$evTimeSeriesPlot <- renderPlot({
+     req(input$yearSlider)
+     
+     ev_data <- electric_data %>%
+       filter(year(Date) >= input$yearSlider[1], year(Date) <= input$yearSlider[2], State == "WA") %>%
+       group_by(Date) %>%
+       summarise(EV_Total = sum(EV_Total, na.rm = TRUE)) %>%
+       ungroup()
+     
+     ggplot(ev_data, aes(x = Date, y = EV_Total)) +
+       geom_line(color = "blue") +
+       labs(title = "EV Registrations Over Time",
+            x = "Date",
+            y = "EV Total Registrations") +
+       theme_minimal() +
+       theme(axis.text.x = element_text(angle = 45, hjust = 1))
+   })
+   
+   # Non-EV Time Series Plot
+   output$nonEvTimeSeriesPlot <- renderPlot({
+     req(input$yearSlider)
+     
+     non_ev_data <- electric_data %>%
+       filter(year(Date) >= input$yearSlider[1], year(Date) <= input$yearSlider[2], State == "WA") %>%
+       group_by(Date) %>%
+       summarise(NonEV_Total = sum(NonEV_Total, na.rm = TRUE)) %>%
+       ungroup()
+     
+     ggplot(non_ev_data, aes(x = Date, y = NonEV_Total)) +
+       geom_line(color = "red") +
+       labs(title = "Non-EV Registrations Over Time",
+            x = "Date",
+            y = "Non-EV Total Registrations") +
+       theme_minimal() +
+       theme(axis.text.x = element_text(angle = 45, hjust = 1))
+   })
+   
+   
+   output$monthlyEVHeatmap <- renderPlot({
+     req(input$selectedYear, input$selectedVehicleType)
+     
+     # Filter data based on selected year
+     filtered_data <- electric_data %>%
+       filter(format(Date, "%Y") == input$selectedYear) %>%
+       mutate(Month = format(Date, "%m"))
+     
+     # Select the appropriate column based on the vehicle type
+     vehicle_column <- ifelse(input$selectedVehicleType == "Total_Vehicles",
+                              "Total_Vehicles",
+                              input$selectedVehicleType)
+     
+     # Aggregate data by month
+     monthly_data <- filtered_data %>%
+       group_by(Month) %>%
+       summarise(Total_Registrations = sum(!!sym(vehicle_column), na.rm = TRUE)) %>%
+       ungroup()
+     
+     # Create the heatmap
+     ggplot(monthly_data, aes(x = Month, y = "", fill = Total_Registrations)) +
+       geom_tile() +
+       scale_fill_gradient(low = "blue", high = "red") +
+       labs(title = paste("Monthly", input$selectedVehicleType, "Registrations in", input$selectedYear),
+            x = "Month",
+            y = "",
+            fill = "Total Registrations") +
+       theme_minimal() +
+       theme(axis.text.x = element_text(angle = 45, hjust = 1))
+   })
+   
+   output$newMonthlyHeatmap <- renderPlot({
+     # Calculate monthly EV totals
+     monthly_ev_totals <- electric_data %>%
+       mutate(Year = year(Date), Month = format(Date, "%m")) %>%
+       group_by(Year, Month) %>%
+       summarise(EV_Total = sum(EV_Total, na.rm = TRUE), .groups = "drop") %>%
+       ungroup()
+     
+     # Convert to wide format for the heatmap
+     wide_data <- reshape2::dcast(monthly_ev_totals, Year ~ Month, value.var = "EV_Total")
+     
+     # Ensure 'Month' is a factor with levels representing months
+     wide_data <- wide_data %>%
+       gather(Month, EV_Total, `01`:`12`, factor_key = TRUE) %>%
+       mutate(Month = factor(Month, levels = sprintf("%02d", 1:12), labels = month.abb))
+     
+     # Create the heatmap using ggplot2
+     ggplot(wide_data, aes(x = Month, y = factor(Year), fill = EV_Total)) +
+       geom_tile(color = "white") +
+       geom_text(aes(label = EV_Total), vjust = 1.5, color = "black", size = 3) +
+       scale_fill_gradient(low = "blue", high = "red", na.value = "white") +
+       labs(title = "Monthly EV Registrations by Year", x = "Month", y = "Year", fill = "Total EV Registrations") +
+       theme_minimal() +
+       theme(axis.text.x = element_text(angle = 45, hjust = 1),
+             axis.title.x = element_blank(),
+             axis.title.y = element_blank())
+   })
+   
+   output$monthlyRegistrationsHeatmap <- renderPlot({
+     req(input$selectedYear, input$selectedVehicleType)
+     
+     # Filter data based on selected year and vehicle type
+     vehicle_column <- ifelse(input$selectedVehicleType == "Total_Vehicles",
+                              "Total_Vehicles",
+                              input$selectedVehicleType)
+     
+     filtered_data <- electric_data %>%
+       filter(format(Date, "%Y") == input$selectedYear) %>%
+       mutate(Month = format(Date, "%m")) %>%
+       group_by(Month) %>%
+       summarise(Total_Registrations = sum(!!sym(vehicle_column), na.rm = TRUE), .groups = "drop") %>%
+       ungroup()
+     
+     # Convert to wide format for the heatmap
+     wide_data <- filtered_data %>%
+       mutate(Month = factor(Month, levels = sprintf("%02d", 1:12), labels = month.abb))
+     
+     # Create the heatmap
+     ggplot(wide_data, aes(x = Month, y = "", fill = Total_Registrations)) +
+       geom_tile(color = "white") +
+       geom_text(aes(label = Total_Registrations), vjust = 1.5, color = "black", size = 3) +
+       scale_fill_gradient(low = "blue", high = "red", na.value = "white") +
+       labs(title = paste("Monthly", input$selectedVehicleType, "Registrations in", input$selectedYear),
+            x = "Month",
+            y = "",
+            fill = "Total Registrations") +
+       theme_minimal() +
+       theme(axis.text.x = element_text(angle = 45, hjust = 1),
+             axis.title.x = element_blank(),
+             axis.title.y = element_blank())
+   })
+   
+   output$allTimeVehicleTypeHeatmap <- renderPlot({
+     req(input$selectedVehicleType)
+     
+     # Select the appropriate column based on the vehicle type
+     vehicle_column <- ifelse(input$selectedVehicleType == "Total_Vehicles",
+                              "Total_Vehicles",
+                              input$selectedVehicleType)
+     
+     # Calculate monthly totals for the selected vehicle type
+     vehicle_type_totals <- electric_data %>%
+       mutate(Year = year(Date), Month = format(Date, "%m")) %>%
+       group_by(Year, Month) %>%
+       summarise(Total = sum(!!sym(vehicle_column), na.rm = TRUE), .groups = "drop") %>%
+       ungroup()
+     
+     # Convert to wide format for the heatmap
+     wide_data <- reshape2::dcast(vehicle_type_totals, Year ~ Month, value.var = "Total")
+     
+     # Ensure 'Month' is a factor with levels representing months
+     wide_data <- wide_data %>%
+       gather(Month, Total, `01`:`12`, factor_key = TRUE) %>%
+       mutate(Month = factor(Month, levels = sprintf("%02d", 1:12), labels = month.abb))
+     
+     # Create the heatmap using ggplot2
+     ggplot(wide_data, aes(x = Month, y = factor(Year), fill = Total)) +
+       geom_tile(color = "white") +
+       geom_text(aes(label = Total), vjust = 1.5, color = "black", size = 3) +
+       scale_fill_gradient(low = "blue", high = "red", na.value = "white") +
+       labs(title = paste("Monthly", input$selectedVehicleType, "Registrations by Year"), x = "Month", y = "Year", fill = "Total Registrations") +
+       theme_minimal() +
+       theme(axis.text.x = element_text(angle = 45, hjust = 1),
+             axis.title.x = element_blank(),
+             axis.title.y = element_blank())
+   })
+   
    
 }
 
