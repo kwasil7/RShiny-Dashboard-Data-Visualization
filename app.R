@@ -215,12 +215,11 @@ ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("supe
                            selected = "EV_Total"),
                checkboxInput("togglePercentage", "Show registrations as Percentage of Population", value = FALSE),
                selectInput(inputId = "numCounties",
-                           label = "Top registrations in Counties:",
-                           choices = c("Top 5" = 5, "Top 10" = 10, "Top 25" = 25, "All" = Inf),
+                           label = "Amount of Counties:",
+                           choices = c("Top 5 registrations" = 5, "Top 10 registrations" = 10, "Top 25 registrations" = 25, "All registrations" = Inf),
                            selected = 10)
              ),
              mainPanel(
-               #plotOutput("percentagePlot"),
                plotOutput("countyBarGraph"),
                plotOutput("stackedAreaPlot"),
                plotOutput("countyBoxplot"),
@@ -245,10 +244,8 @@ ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("supe
                            selected = "EV_Total"))
                ,
              mainPanel(
-               #plotOutput("monthlyEVHeatmap"),
-               plotOutput("allTimeVehicleTypeHeatmap"),
-               #plotOutput("newMonthlyHeatmap"),
-               plotOutput("monthlyRegistrationsHeatmap")
+               plotOutput("monthlyRegistrationsHeatmap"),
+               plotOutput("allTimeVehicleTypeHeatmap")
              )
            )
   )
@@ -887,65 +884,6 @@ server <- function(input, output, session) {
    })
    
    
-   output$monthlyEVHeatmap <- renderPlot({
-     req(input$selectedYear, input$selectedVehicleType)
-     
-     # Filter data based on selected year
-     filtered_data <- electric_data %>%
-       filter(format(Date, "%Y") == input$selectedYear) %>%
-       mutate(Month = format(Date, "%m"))
-     
-     # Select the appropriate column based on the vehicle type
-     vehicle_column <- ifelse(input$selectedVehicleType == "Total_Vehicles",
-                              "Total_Vehicles",
-                              input$selectedVehicleType)
-     
-     # Aggregate data by month
-     monthly_data <- filtered_data %>%
-       group_by(Month) %>%
-       summarise(Total_Registrations = sum(!!sym(vehicle_column), na.rm = TRUE)) %>%
-       ungroup()
-     
-     # Create the heatmap
-     ggplot(monthly_data, aes(x = Month, y = "", fill = Total_Registrations)) +
-       geom_tile() +
-       scale_fill_gradient(low = "blue", high = "red") +
-       labs(title = paste("Monthly", input$selectedVehicleType, "Registrations in", input$selectedYear),
-            x = "Month",
-            y = "",
-            fill = "Total Registrations") +
-       theme_minimal() +
-       theme(axis.text.x = element_text(angle = 45, hjust = 1))
-   })
-   
-   output$newMonthlyHeatmap <- renderPlot({
-     # Calculate monthly EV totals
-     monthly_ev_totals <- electric_data %>%
-       mutate(Year = year(Date), Month = format(Date, "%m")) %>%
-       group_by(Year, Month) %>%
-       summarise(EV_Total = sum(EV_Total, na.rm = TRUE), .groups = "drop") %>%
-       ungroup()
-     
-     # Convert to wide format for the heatmap
-     wide_data <- reshape2::dcast(monthly_ev_totals, Year ~ Month, value.var = "EV_Total")
-     
-     # Ensure 'Month' is a factor with levels representing months
-     wide_data <- wide_data %>%
-       gather(Month, EV_Total, `01`:`12`, factor_key = TRUE) %>%
-       mutate(Month = factor(Month, levels = sprintf("%02d", 1:12), labels = month.abb))
-     
-     # Create the heatmap using ggplot2
-     ggplot(wide_data, aes(x = Month, y = factor(Year), fill = EV_Total)) +
-       geom_tile(color = "white") +
-       geom_text(aes(label = EV_Total), vjust = 1.5, color = "black", size = 3) +
-       scale_fill_gradient(low = "blue", high = "red", na.value = "white") +
-       labs(title = "Monthly EV Registrations by Year", x = "Month", y = "Year", fill = "Total EV Registrations") +
-       theme_minimal() +
-       theme(axis.text.x = element_text(angle = 45, hjust = 1),
-             axis.title.x = element_blank(),
-             axis.title.y = element_blank())
-   })
-   
    output$monthlyRegistrationsHeatmap <- renderPlot({
      req(input$selectedYear, input$selectedVehicleType)
      
@@ -1014,51 +952,6 @@ server <- function(input, output, session) {
              axis.title.x = element_blank(),
              axis.title.y = element_blank())
    })
-   
-   
-   
-   
-   #### not used ####
-   
-   output$percentagePlot <- renderPlot({
-     req(input$yearSlider, input$dataCategory, input$selectedVehicleType)
-     
-     # Determine the selected vehicle type column
-     vehicle_column <- ifelse(input$selectedVehicleType == "Total_Vehicles",
-                              "Total_Vehicles",
-                              input$selectedVehicleType)
-     
-     # Extract just the county names from county_population
-     relevant_counties <- gsub(" County", "", county_population$County)
-     
-     
-     # Update plotting code
-     output$percentagePlot <- renderPlot({
-       req(input$yearSlider, input$dataCategory)
-       
-       # Filter and process data for the plot
-       wa_county_data <- electric_data %>%
-         filter(State == "WA", year(Date) == input$yearSlider) %>%
-         group_by(County) %>%
-         summarise(Selected_Total = sum(!!sym(input$dataCategory), na.rm = TRUE)) %>%
-         mutate(Registration_Percentage = (Selected_Total / Population) * 100)
-       
-       # Debugging: Check the processed data
-       print(head(wa_county_data))
-       
-       
-       # Create the plot
-       ggplot(wa_county_data, aes(x = reorder(County, Registration_Percentage), y = Registration_Percentage, fill = County)) +
-         geom_bar(stat = "identity") +
-         labs(title = "Top 10 Counties by Vehicle Registration Percentage",
-              x = "County",
-              y = "Registration Percentage (%)") +
-         theme_minimal() +
-         theme(axis.text.x = element_text(angle = 45, hjust = 1))
-     })
-   })
-   
-   ####  ####
    
 }
 
