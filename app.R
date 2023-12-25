@@ -29,6 +29,7 @@ library(sf)
 library(tmaptools)
 library(RColorBrewer)
 library(reshape2)
+library(readxl)
 # source("helpers.R")
 
 Sys.setlocale("LC_ALL", "English")
@@ -73,6 +74,29 @@ pierce_county_data <- subset(electric_data, County == "Pierce")
 # the map defined below
 country_data <- read.csv("processed_country_data.csv")
 
+######## POPULATION FILTERING
+county_population <- read_excel("data/Washington_County_Population_2023.xlsx")
+
+# Filter electric_data for Washington State
+electric_data <- electric_data %>%
+  filter(State == "WA")
+
+# Standardize county names in electric_data
+electric_data$County <- gsub(" County", "", electric_data$County)
+
+# Standardize county names in county_population
+county_population$County <- gsub(" County", "", county_population$County)
+
+# Join the dataframes
+electric_data <- electric_data %>%
+  left_join(county_population, by = "County")
+
+# Handle NA values in Population
+electric_data <- electric_data %>%
+  mutate(Population = ifelse(is.na(Population), 0, Population))
+
+######## POPULATION FILTERING
+
 usa <- map_data('usa')
 
 # Getting map data for all US counties
@@ -91,10 +115,14 @@ electric_data_state_level <- electric_data_state_level %>%
 
 # Define a named vector of colors for counties
 county_colors <- setNames(c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-                            "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"),
+                            "#8c564b", "#e377c2", "#b05f5f", "#e67315", "#17becf", "#ffc0cb",
+                            "#eb4034", "#c9eb34", "#8c6701", "#01128c", "#1f4d2e", "#21b53e", "#827e14", "#950350", "#732210", "#0ecf15",
+                            "#edd02b", "#962bed", "#ed2bb3", "#ed522b", "#178a6f", "#573209", "#42382c", "#6e3cc9", "#8a1127", "#109c1e"),
                           c("King", "Pierce", "Clark", "Whatcom", 
                             "Snohomish", "Spokane", "Thurston", "Yakima", 
-                            "Island", "Benton"))
+                            "Island", "Benton", "Kitsap", 
+                            "Jefferson", "Pend Oreille", "Columbia", "Asotin", "Walla Walla", "San Juan", "Skagit", "Kittitas", "Ferry", "Garfield",
+                            "Lewis", "Grant", "Cowlitz", "Franklin", "Clallam", "Stevens", "Grays Harbor", "Okanogan", "Chelan", "Douglas"))
 
 
 # Define UI
@@ -141,8 +169,6 @@ ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("supe
                           label = "Date Interval:",
                           choices = c("Yearly", "Quarterly", "Monthly"),
                           selected = "Monthly")
-              
-              
             ),
             mainPanel(
               plotOutput(outputId = "scatterplot"),
@@ -186,10 +212,15 @@ ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("supe
                            min = 2017, max = 2024, value = c(2017, 2024)),
                selectInput("dataCategory", "Select Vehicle Category:",
                            choices = c("BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles"),
-                           selected = "EV_Total")
-               #, checkboxInput("togglePercentage", "Show as Percentage of Population", value = FALSE)
+                           selected = "EV_Total"),
+               checkboxInput("togglePercentage", "Show registrations as Percentage of Population", value = FALSE),
+               selectInput(inputId = "numCounties",
+                           label = "Top registrations in Counties:",
+                           choices = c("Top 5" = 5, "Top 10" = 10, "Top 25" = 25, "All" = Inf),
+                           selected = 10)
              ),
              mainPanel(
+               #plotOutput("percentagePlot"),
                plotOutput("countyBarGraph"),
                plotOutput("stackedAreaPlot"),
                plotOutput("countyBoxplot"),
@@ -585,38 +616,70 @@ server <- function(input, output, session) {
    
    
    output$countyHeatmap <- renderPlot({
-     req(input$yearSlider, input$dataCategory)
+     req(input$yearSlider, input$dataCategory, input$numCounties)
      
-     # Filter data for the selected year and for Washington state
+     num_counties <- as.numeric(input$numCounties)
+     
+     # Join the electric_data with county_population
      wa_county_data <- electric_data %>%
        filter(year(Date) == input$yearSlider, State == "WA") %>%
        group_by(County) %>%
        summarise(EV_Total_County = sum(!!sym(input$dataCategory), na.rm = TRUE)) %>%
-       ungroup()
+       left_join(county_population, by = "County") %>%
+       mutate(Population = as.numeric(Population))
+     
+     # Calculate registration percentage
+     wa_county_data <- wa_county_data %>%
+       mutate(Registration_Percentage = (EV_Total_County / Population) * 100)
+     
+     # Select top counties based on toggle state and user selection
+     top_counties <- if(input$togglePercentage) {
+       wa_county_data %>%
+         arrange(desc(Registration_Percentage)) %>%
+         slice_head(n = num_counties)
+     } else {
+       wa_county_data %>%
+         arrange(desc(EV_Total_County)) %>%
+         slice_head(n = num_counties)
+     }
+     
+     # Filter for top counties
+     wa_county_data <- wa_county_data %>%
+       filter(County %in% top_counties$County)
      
      # Plot of heatmap for counties in Washington
-     ggplot(wa_county_data, aes(x = County, y = "", fill = EV_Total_County)) +
+     ggplot(wa_county_data, aes(x = County, y = "", fill = if(input$togglePercentage) Registration_Percentage else EV_Total_County)) +
        geom_tile() +
        scale_fill_gradient(low = "blue", high = "red") +
        labs(title = paste("Heatmap of", input$dataCategory, "Registrations by County in Washington State from", input$yearSlider[1], "to", input$yearSlider[2]),
             x = "County",
             y = "",
-            fill = "Registrations") +
+            fill = if(input$togglePercentage) "Registration Percentage" else "Registrations") +
        theme_minimal() +
        theme(axis.text.x = element_text(angle = 45, hjust = 1))
    })
    
-   
    output$stackedAreaPlot <- renderPlot({
+     req(input$yearSlider, input$date_interval, input$dataCategory, input$numCounties)
      
-     req(input$yearSlider, input$date_interval, input$dataCategory)
+     num_counties <- as.numeric(input$numCounties)
      
      # Filter data for the selected year range and specific counties
      filtered_data <- electric_data %>%
-       filter(year(Date) >= input$yearSlider[1], 
-              year(Date) <= input$yearSlider[2], 
-              County %in% c("King", "Pierce", "Clark", "Whatcom", "Snohomish", "Thurston", "Yakima"), 
-              State == "WA")
+       filter(year(Date) >= input$yearSlider[1], year(Date) <= input$yearSlider[2], State == "WA") %>%
+       left_join(county_population, by = "County")
+     
+     # Use the correct Population column
+     filtered_data$Population <- as.numeric(filtered_data$Population.x)
+     
+     
+     # Check if Population column exists and convert it to numeric if needed
+     if("Population" %in% names(filtered_data) && is.character(filtered_data$Population)) {
+       filtered_data$Population <- as.numeric(gsub(",", "", filtered_data$Population))
+     }
+     
+     # Ensure Population is numeric (catch-all in case the column was already numeric)
+     filtered_data$Population <- as.numeric(filtered_data$Population)
      
      # Determine date breaks based on selected interval
      date_breaks <- switch(input$date_interval,
@@ -628,42 +691,74 @@ server <- function(input, output, session) {
      summarized_data <- filtered_data %>%
        mutate(DateGroup = floor_date(Date, unit = date_breaks)) %>%
        group_by(DateGroup, County) %>%
-       summarize(Selected_Total = sum(!!sym(input$dataCategory), na.rm = TRUE), .groups = "drop")
+       summarize(Selected_Total = sum(!!sym(input$dataCategory), na.rm = TRUE), Population = first(Population)) %>%
+       ungroup()
+     
+     # Calculate percentage of population if toggle is on
+     if (input$togglePercentage) {
+       summarized_data <- summarized_data %>%
+         mutate(Selected_Total = (Selected_Total / Population) * 100)
+     }
+     
+     # Select the top counties based on user selection
+     top_counties <- summarized_data %>%
+       group_by(County) %>%
+       summarize(Total = sum(Selected_Total)) %>%
+       arrange(desc(Total)) %>%
+       slice_head(n = num_counties) %>%
+       pull(County)
+     
+     # Filter for top counties
+     summarized_data <- summarized_data %>%
+       filter(County %in% top_counties)
      
      # Create stacked area plot
      ggplot(summarized_data, aes(x = DateGroup, y = Selected_Total, fill = County)) +
        geom_area(alpha = 0.8) +
        scale_fill_manual(values = county_colors) +
-       labs(title = paste(input$dataCategory, "in Selected Counties"),
-            subtitle = paste("From", input$yearSlider[1], "to", input$yearSlider[2]),
+       labs(title = paste("Top", input$numCounties, "Counties for", input$dataCategory, "in Washington State from", input$yearSlider[1], "to", input$yearSlider[2]),
+            subtitle = if(input$togglePercentage) "Percentage of Population" else "Raw Registrations",
             x = "Date",
-            y = paste(input$dataCategory, "Registrations")) +
+            y = if(input$togglePercentage) "Percentage of Population" else paste(input$dataCategory, "Registrations")) +
        theme_minimal() +
        theme(legend.title = element_blank())
    })
    
-   
-   
    output$countyBarGraph <- renderPlot({
      req(input$yearSlider, input$dataCategory)
      
-     # Filter and summarize data
-     wa_county_data <- electric_data %>%
-       filter(year(Date) == input$yearSlider, State == "WA") %>%
+     num_counties <- as.numeric(input$numCounties)
+     
+     # Prepare data
+     plot_data <- electric_data %>%
+       filter(State == "WA", year(Date) == input$yearSlider) %>%
        group_by(County) %>%
        summarise(Selected_Total = sum(!!sym(input$dataCategory), na.rm = TRUE)) %>%
-       ungroup() %>%
-       arrange(desc(Selected_Total)) %>%
-       top_n(10, Selected_Total)  # Select the top 10 counties
+       left_join(county_population, by = "County")
      
-     # Set a color palette (excluding white)
-     color_palette <- brewer.pal(min(10, n_distinct(wa_county_data$County)), "Set3")
+     # Ensure Population is numeric
+     plot_data$Population <- as.numeric(plot_data$Population)
      
-     # Create the bar graph
-     ggplot(wa_county_data, aes(x = reorder(County, Selected_Total), y = Selected_Total, fill = County)) +
+     # Handle any NA or conversion errors in Population
+     plot_data <- plot_data %>%
+       mutate(Population = ifelse(is.na(Population) | !is.finite(Population), 1, Population))
+     
+     # Calculate percentage of population with registrations
+     plot_data <- plot_data %>%
+       mutate(Percentage_With_Registrations = (Selected_Total / Population) * 100)
+     
+     # Select top counties based on user selection
+     top_counties <- plot_data %>%
+       arrange(if(input$togglePercentage) desc(Percentage_With_Registrations) else desc(Selected_Total)) %>%
+       slice_head(n = num_counties)
+     
+     # Create bar graph
+     ggplot(top_counties, aes(x = reorder(County, if(input$togglePercentage) Percentage_With_Registrations else Selected_Total), 
+                              y = if(input$togglePercentage) Percentage_With_Registrations else Selected_Total, 
+                              fill = County)) +
        geom_bar(stat = "identity") +
        scale_fill_manual(values = county_colors) +
-       labs(title = paste("Top 10 Counties for", input$dataCategory, "Registrations in Washington State from", input$yearSlider[1], "to", input$yearSlider[2]),
+       labs(title = paste("Top ", input$numCounties ," Counties for", input$dataCategory, "Registrations in Washington State from", input$yearSlider[1], "to", input$yearSlider[2]),
             x = "County",
             y = "Total Registrations") +
        theme_minimal() +
@@ -671,28 +766,63 @@ server <- function(input, output, session) {
    })
    
    
-   
    output$countyBoxplot <- renderPlot({
-     req(input$yearSlider, input$dataCategory)
+     req(input$yearSlider, input$dataCategory, input$numCounties)
      
-     # Filter data for the selected year range and specific counties in Washington state
+     # Ensure numCounties is numeric
+     num_counties <- as.numeric(input$numCounties)
+     
+     # Ensure the county names in both datasets match
+     county_population_adjusted <- county_population %>%
+       mutate(County = gsub(" County", "", County))
+     
+     # Filter electric_data for the selected year range in Washington state
      filtered_data <- electric_data %>%
-       filter(year(Date) >= input$yearSlider[1], 
-              year(Date) <= input$yearSlider[2], 
-              State == "WA") %>%
-       group_by(County) %>%
-       summarise(Selected_Total = sum(!!sym(input$dataCategory), na.rm = TRUE)) %>%
-       ungroup()
+       filter(year(Date) >= input$yearSlider[1], year(Date) <= input$yearSlider[2], State == "WA")
      
-     # Create the boxplot
-     ggplot(filtered_data, aes(x = County, y = Selected_Total, fill = County)) +
-       geom_boxplot() +
-       scale_fill_brewer(palette = "Set3") +
-       labs(title = paste("Distribution of", input$dataCategory, "by County"),
-            x = "County",
-            y = paste(input$dataCategory, "Total")) +
-       theme_minimal() +
-       theme(axis.text.x = element_text(angle = 45, hjust = 1))
+     # Join with county population data
+     filtered_data <- filtered_data %>%
+       left_join(county_population_adjusted, by = "County")
+     
+     # Ensure the county names in both datasets match
+     county_population_adjusted <- county_population %>%
+       mutate(County = gsub(" County", "", County))
+     
+     # Join with county population data
+     filtered_data <- filtered_data %>%
+       left_join(county_population_adjusted, by = "County")
+     
+     # Check if Population column is available
+     if ("Population" %in% names(filtered_data)) {
+       # Calculate the total selected category and population percentage (if required)
+       filtered_data <- filtered_data %>%
+         group_by(County) %>%
+         summarise(Selected_Total = sum(!!sym(input$dataCategory), na.rm = TRUE),
+                   Population = first(Population)) %>%
+         ungroup()
+       
+       if (input$togglePercentage) {
+         filtered_data <- filtered_data %>%
+           mutate(Percentage_With_Registrations = (Selected_Total / Population) * 100)
+       }
+       
+       # Select the top counties based on user selection
+       top_counties <- filtered_data %>%
+         arrange(desc(if (input$togglePercentage) Percentage_With_Registrations else Selected_Total)) %>%
+         head(n = num_counties)
+       
+       # Create the boxplot
+       ggplot(top_counties, aes(x = County, y = if(input$togglePercentage) Percentage_With_Registrations else Selected_Total, fill = County)) +
+         geom_boxplot() +
+         scale_fill_brewer(palette = "Set3") +
+         labs(title = paste("Top ", num_counties ," Counties for", input$dataCategory, "in Washington State"),
+              x = "County",
+              y = if(input$togglePercentage) "Percentage of Population" else paste(input$dataCategory, "Total")) +
+         theme_minimal() +
+         theme(axis.text.x = element_text(angle = 45, hjust = 1))
+     } else {
+       print("Population data not found in the joined dataset.")
+     }
    })
    
    output$timeSeriesPlot <- renderPlot({
@@ -885,6 +1015,50 @@ server <- function(input, output, session) {
              axis.title.y = element_blank())
    })
    
+   
+   
+   
+   #### not used ####
+   
+   output$percentagePlot <- renderPlot({
+     req(input$yearSlider, input$dataCategory, input$selectedVehicleType)
+     
+     # Determine the selected vehicle type column
+     vehicle_column <- ifelse(input$selectedVehicleType == "Total_Vehicles",
+                              "Total_Vehicles",
+                              input$selectedVehicleType)
+     
+     # Extract just the county names from county_population
+     relevant_counties <- gsub(" County", "", county_population$County)
+     
+     
+     # Update plotting code
+     output$percentagePlot <- renderPlot({
+       req(input$yearSlider, input$dataCategory)
+       
+       # Filter and process data for the plot
+       wa_county_data <- electric_data %>%
+         filter(State == "WA", year(Date) == input$yearSlider) %>%
+         group_by(County) %>%
+         summarise(Selected_Total = sum(!!sym(input$dataCategory), na.rm = TRUE)) %>%
+         mutate(Registration_Percentage = (Selected_Total / Population) * 100)
+       
+       # Debugging: Check the processed data
+       print(head(wa_county_data))
+       
+       
+       # Create the plot
+       ggplot(wa_county_data, aes(x = reorder(County, Registration_Percentage), y = Registration_Percentage, fill = County)) +
+         geom_bar(stat = "identity") +
+         labs(title = "Top 10 Counties by Vehicle Registration Percentage",
+              x = "County",
+              y = "Registration Percentage (%)") +
+         theme_minimal() +
+         theme(axis.text.x = element_text(angle = 45, hjust = 1))
+     })
+   })
+   
+   ####  ####
    
 }
 
