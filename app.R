@@ -248,6 +248,17 @@ ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("supe
                plotOutput("allTimeVehicleTypeHeatmap")
              )
            )
+  ),
+  tabPanel("WA Registration Analysis",
+           fluidPage(
+             titlePanel("Analysis of WA Registered Vehicles Outside the State"),
+             textOutput("totalVehiclesOutsideWA"),
+             plotOutput("usHeatmap"),
+             actionButton("toggleButton1", "Show/Hide Specifics"),  # Button to toggle the plot
+             div(id = "plotDiv",  # Div container for the plot
+                 plotOutput("waAnalysisPlot", height = "2000px")
+            )
+           )
   )
   
   # Add more tabPanel for other pages if needed
@@ -952,6 +963,172 @@ server <- function(input, output, session) {
              axis.title.x = element_blank(),
              axis.title.y = element_blank())
    })
+   
+   
+   # Server logic to show/hide the plot
+   observeEvent(input$toggleButton1, {
+     toggle("plotDiv")  # Use shinyjs to toggle the div visibility
+   })
+   
+   
+   output$waAnalysisPlot <- renderPlot({
+     # Load the processed_country_data.csv file
+     processed_country_data <- read.csv("processed_country_data.csv")
+     
+     # Define Washington state geographical bounds
+     wa_lat_bounds <- c(45.5, 49)
+     wa_long_bounds <- c(-124.5, -117)
+     
+     # Function to check if a location is outside Washington state bounds
+     is_outside_washington_bounds <- function(lat, long) {
+       return(lat < wa_lat_bounds[1] || lat > wa_lat_bounds[2] || long < wa_long_bounds[1] || long > wa_long_bounds[2])
+     }
+     
+     # Apply the function and subset the data
+     processed_country_data$Outside_WA_Bounds <- mapply(is_outside_washington_bounds, processed_country_data$lat, processed_country_data$long)
+     wa_vehicles_outside_bounds <- subset(processed_country_data, `State...3` != "WA" & Outside_WA_Bounds)
+     
+     # Aggregating to find the top '50' locations
+     top_locations <- wa_vehicles_outside_bounds %>%
+       group_by(full_address) %>%
+       summarize(Count = n()) %>%
+       arrange(desc(Count)) %>%
+       head(450)
+     
+     # Plotting with an adjusted y-axis range
+     if (nrow(top_locations) > 0) {
+       max_count <- max(top_locations$Count, na.rm = TRUE)
+       ggplot(top_locations, aes(x = reorder(full_address, Count), y = Count)) +
+         geom_bar(stat = "identity") +
+         coord_flip() + # Flipping coordinates for better readability
+         scale_y_continuous(limits = c(0, max_count * 1)) + # Extend y-axis to 120% of max count
+         labs(title = "Top 15 Locations of Vehicles Registered in WA but Located Outside",
+              x = "Location",
+              y = "Count of Vehicles")
+     } else {
+       print("No data available for vehicles registered in WA but located outside state bounds")
+     }
+   })
+   
+   
+   output$usHeatmap <- renderPlot({
+     # Load the processed_country_data.csv file
+     processed_country_data <- read.csv("processed_country_data.csv")
+     
+     # Define Washington state geographical bounds
+     wa_lat_bounds <- c(45.5, 49)
+     wa_long_bounds <- c(-124.5, -117)
+     
+     # Function to check if a location is outside Washington state bounds
+     is_outside_washington_bounds <- function(lat, long) {
+       return(lat < wa_lat_bounds[1] || lat > wa_lat_bounds[2] || long < wa_long_bounds[1] || long > wa_long_bounds[2])
+     }
+     
+     # Apply the function and subset the data
+     processed_country_data$Outside_WA_Bounds <- mapply(is_outside_washington_bounds, processed_country_data$lat, processed_country_data$long)
+     wa_vehicles_outside_bounds <- subset(processed_country_data, `State...3` != "WA" & Outside_WA_Bounds)
+     
+     # Function to convert state abbreviations to full names
+     abbrev_to_fullname <- function(abbrev) {
+       state.name[match(abbrev, state.abb)]
+     }
+     
+     # Aggregating data by state
+     state_counts <- wa_vehicles_outside_bounds %>%
+       group_by(State...3) %>%
+       summarize(Count = n()) %>%
+       na.omit() # Remove NA values
+     
+     # Convert state abbreviations to full names
+     state_counts$region <- tolower(sapply(state_counts$State...3, abbrev_to_fullname))
+     
+     # Getting US map data and fortifying it
+     states_map <- map_data("state") %>%
+       fortify()
+     
+     # Creating a lookup table for state abbreviations to full names
+     state_names <- data.frame(abb = tolower(state.abb), full = tolower(state.name))
+     
+     # Merging the state counts with the lookup table to get full state names
+     state_counts <- state_counts %>%
+       mutate(State...3 = tolower(State...3)) %>%
+       left_join(state_names, by = c("State...3" = "abb"))
+     
+     # Merging map data with state counts
+     map_data_merged <- left_join(states_map, state_counts, by = c("region" = "full"))
+     
+     # Ensure NA values are set to 0 for a consistent color scale
+     map_data_merged$Count[is.na(map_data_merged$Count)] <- 0
+     
+     # Creating the heatmap
+     gg <- ggplot(data = map_data_merged, aes(x = long, y = lat, group = group, fill = Count)) +
+       geom_polygon(color = "white") +
+       scale_fill_gradient(low = "blue", high = "red", na.value = "grey50") +
+       coord_fixed(1.3) +
+       theme_void() +
+       labs(title = "Heatmap of Vehicle Registrations Outside Washington by State (Excluding WA)", fill = "Count")
+     
+     print(gg)
+     
+   })
+   
+
+   output$totalVehiclesOutsideWA <- renderText({
+     # Load the processed_country_data.csv file
+     processed_country_data <- read.csv("processed_country_data.csv")
+     
+     # Define Washington state geographical bounds
+     wa_lat_bounds <- c(45.5, 49)
+     wa_long_bounds <- c(-124.5, -117)
+     
+     # Function to check if a location is outside Washington state bounds
+     is_outside_washington_bounds <- function(lat, long) {
+       return(lat < wa_lat_bounds[1] || lat > wa_lat_bounds[2] || long < wa_long_bounds[1] || long > wa_long_bounds[2])
+     }
+     
+     # Apply the function and subset the data
+     processed_country_data$Outside_WA_Bounds <- mapply(is_outside_washington_bounds, processed_country_data$lat, processed_country_data$long)
+     wa_vehicles_outside_bounds <- subset(processed_country_data, `State...3` != "WA" & Outside_WA_Bounds)
+     
+     # Function to convert state abbreviations to full names
+     abbrev_to_fullname <- function(abbrev) {
+       state.name[match(abbrev, state.abb)]
+     }
+     
+     # Aggregating data by state
+     state_counts <- wa_vehicles_outside_bounds %>%
+       group_by(State...3) %>%
+       summarize(Count = n()) %>%
+       na.omit() # Remove NA values
+     
+     # Convert state abbreviations to full names
+     state_counts$region <- tolower(sapply(state_counts$State...3, abbrev_to_fullname))
+     
+     # Getting US map data and fortifying it
+     states_map <- map_data("state") %>%
+       fortify()
+     
+     # Creating a lookup table for state abbreviations to full names
+     state_names <- data.frame(abb = tolower(state.abb), full = tolower(state.name))
+     
+     # Merging the state counts with the lookup table to get full state names
+     state_counts <- state_counts %>%
+       mutate(State...3 = tolower(State...3)) %>%
+       left_join(state_names, by = c("State...3" = "abb"))
+     
+     # Merging map data with state counts
+     map_data_merged <- left_join(states_map, state_counts, by = c("region" = "full"))
+     
+     
+     # Using similar logic as in the usHeatmap plot to filter out WA vehicles
+     processed_country_data$Outside_WA_Bounds <- mapply(is_outside_washington_bounds, processed_country_data$lat, processed_country_data$long)
+     wa_vehicles_outside_bounds <- subset(processed_country_data, `State...3` != "WA" & Outside_WA_Bounds)
+     
+     # Now compute the total
+     total_vehicles <- nrow(wa_vehicles_outside_bounds)
+     paste("Total number of vehicles registered outside of Washington: ", total_vehicles)
+   })
+   
    
 }
 
