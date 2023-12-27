@@ -30,7 +30,6 @@ library(tmaptools)
 library(RColorBrewer)
 library(reshape2)
 library(readxl)
-library(shinycssloaders)
 # source("helpers.R")
 
 Sys.setlocale("LC_ALL", "English")
@@ -153,24 +152,35 @@ ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("supe
             tags$p("Island County is composed entirely of islands and classied as rural."),
             "What about a total number of registered vehicles across time?",
             plotOutput(outputId = "total_plot"),
-            "Electric cars and electric trucks over time in King County",
+            br(),
             div(
               tags$img(src = "barplot_animate.gif", alt = "Animated Bar Plot", width = "100%", height = "auto"),
-              style = "text-align: left; width: 50%;"  # Adjust width as needed
-            )
+              style = "text-align: left; width: 50%;"  # Adjust width
+            ),
+            "Electric cars and electric trucks over time in King County",
+            br(),
+            br(),
+            div(
+              tags$img(src = "state_ev_total_over_time.gif", alt = "Animated Scatter Plot", width = "100%", height = "auto"),
+              style = "text-align: left"
+            ),
+            "Electric vehicles over time in the whole Washington state"
           )
   ),
   
   tabPanel("Analysis",
           sidebarLayout(
             sidebarPanel(
-              helpText("Explore the Electric Vehicle Population Size History By County Dataset"),
+              tags$h2("Explore the Electric Vehicle Population Size in Selected County"),
               selectInput(inputId = "y", label = "Y-axis:", choices = c("BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles"), selected = "EV_Total"),
               selectInput(inputId = "x", label = "X-axis:", choices = c("BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles", "Date"), selected = "Date"),
               selectInput(inputId = "z", label = "Color by:", choices = c("Vehicle_Primary_Use", "BEVs", "PHEVs"), selected = "Vehicle_Primary_Use"),
               sliderInput(inputId = "alpha", label = "Alpha:", min = 0, max = 1, value = 0.5),
-              selectInput(inputId = "selected_type", label = "Select vehicle type:", choices = c("Passenger", "Truck"), selected = "Passenger"),
-              sliderInput('years', 'Years', min = 2017, max = 2024, value = c(2017, 2024)),
+              selectInput(inputId = "selectedCounty",
+                          label = "Select a County:",
+                          choices = unique(electric_data$County),
+                          selected = "King"),
+              "You can adjust date intervals below in the plot called Number of Electric Vehicles Over Time in Pierce County",
               selectInput(inputId = "date_interval",
                           label = "Date Interval:",
                           choices = c("Yearly", "Quarterly", "Monthly"),
@@ -202,12 +212,18 @@ ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("supe
                 "There are 9 urban counties and 30 rural counties in Washington state. King County is the most populated in the state.
                 Yakima is the most populated rural county with 257.001 people.",
                 tags$br(), tags$br(),
-                titlePanel("Washington State, US"),
-                plotOutput("map_wa"),
-                plotOutput("map_wa_counties"),
                 titlePanel("Washington State Vehicle Registrations Across the US"),
                 plotOutput("map_states", height = "600px"),
-                plotOutput("map_states_no_wa", height = "600px")
+                titlePanel("Analysis of WA Registered Vehicles Outside the State"),
+                textOutput("totalVehiclesOutsideWA"),
+                plotOutput("usHeatmap"),
+                actionButton("toggleButton1", "Show/Hide Specifics"),  # Button to toggle the plot
+                div(id = "plotDiv",  # Div container for the plot
+                    plotOutput("waAnalysisPlot", height = "2000px")
+                ),
+                titlePanel("Washington State, US"),
+                plotOutput("map_wa"),
+                plotOutput("map_wa_counties")
              )
            )
   ),
@@ -247,23 +263,12 @@ ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("supe
                ,
                selectInput("selectedVehicleType", "Select Vehicle Type:",
                            choices = c("BEVs", "PHEVs", "EV_Total", "NonEV_Total", "Total_Vehicles"),
-                           selected = "EV_Total"))
+                           selected = "EV Total"))
                ,
              mainPanel(
                plotOutput("monthlyRegistrationsHeatmap"),
                plotOutput("allTimeVehicleTypeHeatmap")
              )
-           )
-  ),
-  tabPanel("WA Registration Analysis",
-           fluidPage(
-             titlePanel("Analysis of WA Registered Vehicles Outside the State"),
-             textOutput("totalVehiclesOutsideWA"),
-             plotOutput("usHeatmap"),
-             actionButton("toggleButton1", "Show/Hide Specifics"),  # Button to toggle the plot
-             div(id = "plotDiv",  # Div container for the plot
-                 plotOutput("waAnalysisPlot", height = "2000px")
-            )
            )
   )
   
@@ -294,15 +299,27 @@ server <- function(input, output, session) {
   })
   
   output$scatterplot <- renderPlot({
-    ggplot(data = king_county_data, aes_string(x = input$x, y = input$y, color = input$z)) +
+    req(input$selectedCounty)  # County needs to be selected
+    filtered_data <- electric_data %>%
+      filter(County == input$selectedCounty)  # Filter for the selected county
+    
+    # Proceed with your existing ggplot code using filtered_data
+    ggplot(data = filtered_data, aes_string(x = input$x, y = input$y, color = input$z)) +
       geom_point(alpha = input$alpha) +
       labs(title = "The Scatterplot")
   })
   
   output$densityplot <- renderPlot({
-    ggplot(data = king_county_data, aes_string(x = input$x)) +
+    req(input$selectedCounty)  # County needs to be selected
+    
+    # Filter the data for the selected county
+    filtered_data <- electric_data %>%
+      filter(County == input$selectedCounty)
+    
+    # The density plot with the filtered data
+    ggplot(data = filtered_data, aes_string(x = input$x)) +
       geom_density() +
-      labs(title = "The Density Plot")
+      labs(title = paste("Density Plot for", input$selectedCounty))
   })
   
   output$lineplot <- renderPlot({
@@ -1134,29 +1151,43 @@ server <- function(input, output, session) {
      total_vehicles <- nrow(wa_vehicles_outside_bounds)
      paste("Total number of vehicles registered outside of Washington: ", total_vehicles)
    })
+   # Here is the code for our first animated plot
+   # animated_plot <- ggplot(king_county_data, aes(x = Vehicle_Primary_Use, y = EV_Total)) +  
+   #   geom_bar(stat = "identity") +
+   #   labs(title = "Total Number of Electric Vehicles by Vehicle Primary Use \non {frame_time} in King County", 
+   #        x = "Vehicle Primary Use", y = "Total Number of EVs") +
+   #   theme_minimal() +
+   #   theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5),  # Adjust the title appearance
+   #         plot.margin = margin(10, 10, 10, 10)) +  # Adjust plot margins
+   #   transition_time(Date) +  # Assuming 'Date' is the time variable in your dataset
+   #   shadow_mark() +
+   #   enter_grow() +
+   #   enter_fade()
+   # 
+   # anim <- animate(animated_plot, renderer = gifski_renderer())
+   # # anim_save("barplot_animate.gif", anim)
+   # anim
    
-   # output$animated_plot <- renderPlot({
-   #   
-   #   req(king_county_data)
-   #   
-   #   anim_file <- tempfile(fileext = ".gif")
-   #   animated_plot <- ggplot(king_county_data, aes(x = Vehicle_Primary_Use, y = EV_Total)) +  
-   #     geom_bar(stat = "identity") +
-   #     labs(title = "Total Number of Electric Vehicles by Vehicle Primary Use \non {closest_state} in King County", 
-   #          x = "Vehicle Primary Use", y = "Total Number of EVs") +
-   #     theme_minimal() +
-   #     theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5)) + 
-   #     transition_states(Date, transition_length = 2, state_length = 1) +
-   #     shadow_mark() +
-   #     enter_grow() +
-   #     enter_fade()
-   #   
-   #   anim_file <- tempfile(fileext = ".gif")
-   #   anim_save(anim_file, animation = animated_plot)
-   #   
-   #   # Return an image tag with the path to the gif
-   #   tags$img(src = anim_file, alt = "Animated plot", style = "max-width: 100%;")
-   # })
+   # Here is the code for our second animated plot
+   # # Preprocessing
+   # state_ev_totals <- electric_data %>%
+   #   group_by(Date) %>%
+   #   summarize(Total_EV = sum(EV_Total, na.rm = TRUE)) %>%
+   #   arrange(Date) %>%
+   #   filter(!is.na(Date)) # Make sure to remove NA Dates if there are any
+   # 
+   # # Animation
+   # animated_plot2 <- ggplot(state_ev_totals, aes(x = Date, y = Total_EV)) +  
+   #   geom_line() +  # Using geom_line for a time series line plot
+   #   labs(title = "Total Number of Electric Vehicles Over Time in Washington", 
+   #        x = "Date", y = "Total Number of EVs") +
+   #   theme_minimal() +
+   #   theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5)) +
+   #   transition_reveal(Date)  # Reveal the line over time
+   # 
+   # # Saving the animation
+   # anim_2nd <- animate(animated_plot2, renderer = gifski_renderer(), width = 800, height = 400)
+   # anim_save("state_ev_total_over_time.gif", anim_2nd)
    
 }
 
