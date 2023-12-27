@@ -219,7 +219,7 @@ ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("supe
                 plotOutput("usHeatmap"),
                 actionButton("toggleButton1", "Show/Hide Specifics"),  # Button to toggle the plot
                 div(id = "plotDiv",  # Div container for the plot
-                    plotOutput("waAnalysisPlot", height = "2000px")
+                    plotOutput("waAnalysisPlot", height = "2500px")
                 ),
                 titlePanel("Washington State, US"),
                 plotOutput("map_wa"),
@@ -1025,7 +1025,7 @@ server <- function(input, output, session) {
          geom_bar(stat = "identity") +
          coord_flip() + # Flipping coordinates for better readability
          scale_y_continuous(limits = c(0, max_count * 1)) + # Extend y-axis to 120% of max count
-         labs(title = "Top 15 Locations of Vehicles Registered in WA but Located Outside",
+         labs(title = "Locations of Vehicles Registered in WA but Located Outside",
               x = "Location",
               y = "Count of Vehicles")
      } else {
