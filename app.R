@@ -30,6 +30,7 @@ library(tmaptools)
 library(RColorBrewer)
 library(reshape2)
 library(readxl)
+library(shinycssloaders)
 # source("helpers.R")
 
 Sys.setlocale("LC_ALL", "English")
@@ -151,7 +152,12 @@ ui <- navbarPage("Data Visualization Group 15 Project", theme = shinytheme("supe
             plotOutput(outputId = "island_plot"),
             tags$p("Island County is composed entirely of islands and classied as rural."),
             "What about a total number of registered vehicles across time?",
-            plotOutput(outputId = "total_plot")
+            plotOutput(outputId = "total_plot"),
+            "Electric cars and electric trucks over time in King County",
+            div(
+              tags$img(src = "barplot_animate.gif", alt = "Animated Bar Plot", width = "100%", height = "auto"),
+              style = "text-align: left; width: 50%;"  # Adjust width as needed
+            )
           )
   ),
   
@@ -1129,6 +1135,28 @@ server <- function(input, output, session) {
      paste("Total number of vehicles registered outside of Washington: ", total_vehicles)
    })
    
+   # output$animated_plot <- renderPlot({
+   #   
+   #   req(king_county_data)
+   #   
+   #   anim_file <- tempfile(fileext = ".gif")
+   #   animated_plot <- ggplot(king_county_data, aes(x = Vehicle_Primary_Use, y = EV_Total)) +  
+   #     geom_bar(stat = "identity") +
+   #     labs(title = "Total Number of Electric Vehicles by Vehicle Primary Use \non {closest_state} in King County", 
+   #          x = "Vehicle Primary Use", y = "Total Number of EVs") +
+   #     theme_minimal() +
+   #     theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5)) + 
+   #     transition_states(Date, transition_length = 2, state_length = 1) +
+   #     shadow_mark() +
+   #     enter_grow() +
+   #     enter_fade()
+   #   
+   #   anim_file <- tempfile(fileext = ".gif")
+   #   anim_save(anim_file, animation = animated_plot)
+   #   
+   #   # Return an image tag with the path to the gif
+   #   tags$img(src = anim_file, alt = "Animated plot", style = "max-width: 100%;")
+   # })
    
 }
 
